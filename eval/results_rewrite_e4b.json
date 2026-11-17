@@ -1,0 +1,307 @@
+[
+ {
+  "kind": "local",
+  "input": "Hi team, i wanted to give a quick update on the migration. We was able to move most of the services last week, but their is still a few issues with the payment service.",
+  "output": "Hi team, I wanted to give a quick update on the migration. We were able to move most of the services last week, but there are still a few issues with the payment service."
+ },
+ {
+  "kind": "local",
+  "input": "The logs shows timeouts when the database are under load. I think we should of tested this more carefully before.",
+  "output": "The logs show timeouts when the database is under load. I think we should have tested this more carefully before."
+ },
+ {
+  "kind": "local",
+  "input": "Lets discuss it on tomorrow's call, and please send me any informations you have.",
+  "output": "Let's discuss it on tomorrow's call, and please send me any information you have."
+ },
+ {
+  "kind": "local",
+  "input": "Thanks for you're help yesterday, it was realy usefull and i appreciate it alot.",
+  "output": "Thanks for your help yesterday, it was really useful and I appreciate it a lot."
+ },
+ {
+  "kind": "local",
+  "input": "She dont like apples, but he likes them alot and eat one every day.",
+  "output": "She doesn't like apples, but he likes them a lot and eats one every day."
+ },
+ {
+  "kind": "local",
+  "input": "Their going to the park tomorow, and then there going to get ice cream.",
+  "output": "They're going to the park tomorrow, and then they're going to get ice cream."
+ },
+ {
+  "kind": "local",
+  "input": "I recieved you're email and will adress the isue as soon as posible.",
+  "output": "I received your email and will address the issue as soon as possible."
+ },
+ {
+  "kind": "local",
+  "input": "We have to complete the report untill friday, otherwise the client will not be happy.",
+  "output": "We have to complete the report until Friday, otherwise the client will not be happy."
+ },
+ {
+  "kind": "local",
+  "input": "Me and him went to the store, buyed some milk, and then we goes home.",
+  "output": "He and I went to the store, bought some milk, and then we went home."
+ },
+ {
+  "kind": "local",
+  "input": "The meeting have been moved to 3pm becuase the manager are travelling.",
+  "output": "The meeting has been moved to 3pm because the manager is travelling."
+ },
+ {
+  "kind": "local",
+  "input": "Please find attached the documents you requested, let me know if you needs anything else.",
+  "output": "Please find attached the documents you requested; let me know if you need anything else."
+ },
+ {
+  "kind": "local",
+  "input": "I has been working on this project since three month and it is allmost finished.",
+  "output": "I have been working on this project for three months and it is almost finished."
+ },
+ {
+  "kind": "local",
+  "input": "Its a good idea but we should consider the cost, the timeline and who will do it?",
+  "output": "It's a good idea, but we should consider the cost, the timeline, and who will do it."
+ },
+ {
+  "kind": "local",
+  "input": "He said that he dont know nothing about the incident, and I beleive him.",
+  "output": "He said that he doesn't know anything about the incident, and I believe him."
+ },
+ {
+  "kind": "local",
+  "input": "Every employees must wear there badge at all times while in the building.",
+  "output": "Every employee must wear their badge at all times while in the building."
+ },
+ {
+  "kind": "local",
+  "input": "Could you please sent me the invoice for last months order, i cant find it.",
+  "output": "Could you please send me the invoice for last month's order? I can't find it."
+ },
+ {
+  "kind": "local",
+  "input": "The software update have fixed most of the bugs but their are still some crashes on startup.",
+  "output": "The software update has fixed most of the bugs, but there are still some crashes on startup."
+ },
+ {
+  "kind": "local",
+  "input": "I am agree with your proposal, however I think we need more datas before deciding.",
+  "output": "I agree with your proposal; however, I think we need more data before deciding."
+ },
+ {
+  "kind": "local",
+  "input": "We discused the problem for hours and finaly came to a conclusion that satisfy everyone.",
+  "output": "We discussed the problem for hours and finally came to a conclusion that satisfied everyone."
+ },
+ {
+  "kind": "local",
+  "input": "My freind and me is planning a trip to Itally next summer, we hopes it will be fun.",
+  "output": "My friend and I are planning a trip to Italy next summer; we hope it will be fun."
+ },
+ {
+  "kind": "local",
+  "input": "Yesterday I go to the doctor and he tell me to rest for a week.",
+  "output": "Yesterday I went to the doctor and he told me to rest for a week."
+ },
+ {
+  "kind": "local",
+  "input": "There is many reason why the project failed, most important are the lack of planing.",
+  "output": "There are many reasons why the project failed, most important is the lack of planning."
+ },
+ {
+  "kind": "local",
+  "input": "Dear Mr. Smith, I am writting to inform you that you're application has been recieved.",
+  "output": "Dear Mr. Smith, I am writing to inform you that your application has been received."
+ },
+ {
+  "kind": "local",
+  "input": "The new feature allow users to export they're data in different format.",
+  "output": "The new feature allows users to export their data in different formats."
+ },
+ {
+  "kind": "local",
+  "input": "if you have any question, please dont hesitate to contact us.",
+  "output": "If you have any questions, please don't hesitate to contact us."
+ },
+ {
+  "kind": "awkward",
+  "input": "I am writing for to ask you about the possibility of the meeting in which we could discuss about the project what we started before.",
+  "output": "I am writing to ask you about the possibility of a meeting in which we could discuss the project we started before."
+ },
+ {
+  "kind": "awkward",
+  "input": "Yesterday I was going to the shop for buy some food but it was closed because of is holiday so I returned home with empty hands.",
+  "output": "Yesterday I was going to the shop to buy some food, but it was closed because of its holiday, so I returned home with empty hands."
+ },
+ {
+  "kind": "awkward",
+  "input": "The company which I am working there is very big and have many peoples who are doing different things in different departments.",
+  "output": "The company where I work is very big and has many people who are doing different things in different departments."
+ },
+ {
+  "kind": "awkward",
+  "input": "Because of the reason that the weather was bad, we decided that the picnic that we planned it will be moved to another day.",
+  "output": "Because the weather was bad, we decided that the picnic we planned would be moved to another day."
+ },
+ {
+  "kind": "awkward",
+  "input": "My opinion about this theme is that it is very important for the society because nowadays the technologies are developing very fast.",
+  "output": "My opinion about this theme is that it is very important for society because nowadays technologies are developing very fast."
+ },
+ {
+  "kind": "awkward",
+  "input": "I want that you send me the report until tomorrow because my boss he is waiting it already since two days.",
+  "output": "I want you to send me the report by tomorrow because my boss has been waiting for it for two days."
+ },
+ {
+  "kind": "awkward",
+  "input": "In the last time I have much thought about the changing of my job, but I am not sure that is it the right decision for me.",
+  "output": "Lately, I have thought a lot about changing my job, but I am not sure if it is the right decision for me."
+ },
+ {
+  "kind": "awkward",
+  "input": "He is a person who he always is helping other persons when they have problems with their works.",
+  "output": "He is a person who is always helping other people when they have problems with their work."
+ },
+ {
+  "kind": "awkward",
+  "input": "Please be so kind and tell me what is the status of my request which I have sent you in the last week.",
+  "output": "Please be so kind and tell me what the status of my request is, which I sent you last week."
+ },
+ {
+  "kind": "awkward",
+  "input": "We are glad to inform you that your application for the vacancy was accepted and we are waiting you on the interview.",
+  "output": "We are glad to inform you that your application for the vacancy was accepted and we are waiting for you for the interview."
+ },
+ {
+  "kind": "awkward",
+  "input": "The product what we are selling it is of very high quality and the price is also is very reasonable for everyone peoples.",
+  "output": "The product we are selling is of very high quality, and the price is also very reasonable for everyone."
+ },
+ {
+  "kind": "awkward",
+  "input": "After I have finished to read the book, I understood that the author wanted to tell us about the importance from family.",
+  "output": "After I finished reading the book, I understood that the author wanted to tell us about the importance of family."
+ },
+ {
+  "kind": "awkward",
+  "input": "Our team have decided to postponing the release because there is some problems what we need to fix them before.",
+  "output": "Our team has decided to postpone the release because there are some problems that we need to fix before."
+ },
+ {
+  "kind": "awkward",
+  "input": "It is depend on many factors that how much time the project will take and what is the budget what we have.",
+  "output": "It depends on many factors how much time the project will take and what budget we have."
+ },
+ {
+  "kind": "awkward",
+  "input": "I am very interesting in this position because I have a big experience in the field and I like very much to working with peoples.",
+  "output": "I am very interested in this position because I have a lot of experience in the field and I really like working with people."
+ },
+ {
+  "kind": "awkward",
+  "input": "She told me that she cannot to come to the party because of she has a lot of the works to do in the home.",
+  "output": "She told me that she cannot come to the party because she has a lot of work to do at home."
+ },
+ {
+  "kind": "awkward",
+  "input": "With regards to your email of yesterday, I would like to say that I am agree in principle but there is things which need to be clarified before.",
+  "output": "With regard to your email of yesterday, I would like to say that I agree in principle, but there are things which need to be clarified first."
+ },
+ {
+  "kind": "awkward",
+  "input": "The reason why I am late is because that my car it was broken and I was need to wait the mechanic during two hours.",
+  "output": "The reason I am late is because my car was broken and I had to wait for the mechanic for two hours."
+ },
+ {
+  "kind": "awkward",
+  "input": "Despite of the fact that he was tired, but he continued to working until the very late in the night.",
+  "output": "Despite the fact that he was tired, he continued to work until very late in the night."
+ },
+ {
+  "kind": "awkward",
+  "input": "Could you explain me how this function it works, because I try to understand it but the documentation is not clear for me.",
+  "output": "Could you explain to me how this function works, because I'm trying to understand it but the documentation isn't clear to me."
+ },
+ {
+  "kind": "awkward",
+  "input": "This is the thing that I wanted to say to you about it that we should be doing more better with the communication between the teams.",
+  "output": "This is the thing that I wanted to say to you about it: we should be doing better with the communication between the teams."
+ },
+ {
+  "kind": "awkward",
+  "input": "Our customers are complaining about that the app is slow, so we need to do something with this for improve the speed.",
+  "output": "Our customers are complaining that the app is slow, so we need to do something about this to improve the speed."
+ },
+ {
+  "kind": "awkward",
+  "input": "At the end of the day what matters is that the user is able for to complete his task without any frustrations of the interface.",
+  "output": "At the end of the day, what matters is that the user is able to complete his task without any frustrations with the interface."
+ },
+ {
+  "kind": "awkward",
+  "input": "I think that, that the proposal what you made is good, but need to be think about the risks more deeper.",
+  "output": "I think that the proposal you made is good, but it needs to think about the risks more deeply."
+ },
+ {
+  "kind": "awkward",
+  "input": "Me and my colleague we was discussing about the plan which was made from the manager and we thinked that it have some weakness.",
+  "output": "My colleague and I were discussing the plan that the manager made, and we thought it had some weaknesses."
+ },
+ {
+  "kind": "harsh",
+  "input": "Yesterday me and friend go cinema but film was very boring so we leaved after half hour and go eat pizza.",
+  "output": "Yesterday my friend and I went to the cinema, but the film was very boring so we left after half an hour and went to eat pizza."
+ },
+ {
+  "kind": "harsh",
+  "input": "Is very difficult for me explain you what happened because I not remember good all things that was happen in that day.",
+  "output": "It is very difficult for me to explain to you what happened because I don't remember all the things that happened that day well."
+ },
+ {
+  "kind": "harsh",
+  "input": "I am student of university since two years and I am study the computer science what is very interesting for me.",
+  "output": "I am a student at the university for two years, and I am studying computer science, which is very interesting to me."
+ },
+ {
+  "kind": "harsh",
+  "input": "Why you not answered to my letter that I sended you before one week? I am waiting still the answer from you.",
+  "output": "Why you not answered my letter that I sent you a week ago? I am still waiting for an answer from you."
+ },
+ {
+  "kind": "harsh",
+  "input": "He asked me that where I am living and what I am doing in this city and I answered him that I am here for the work.",
+  "output": "He asked me where I was living and what I was doing in this city, and I answered him that I was here for work."
+ },
+ {
+  "kind": "harsh",
+  "input": "If I would have more money I would bought the house which have big garden and many tree for my children playing.",
+  "output": "If I had more money, I would buy the house which has a big garden and many trees for my children to play in."
+ },
+ {
+  "kind": "harsh",
+  "input": "The meeting what we was planned for monday it is cancelled because of the boss he is sick and nobody can to replace him.",
+  "output": "The meeting that we had planned for Monday is cancelled because the boss is sick and nobody can replace him."
+ },
+ {
+  "kind": "harsh",
+  "input": "We needs discuss about budget for next year, because actual situation is not good and costs are more high than before expected.",
+  "output": "We need to discuss the budget for next year because the actual situation is not good and costs are higher than expected."
+ },
+ {
+  "kind": "harsh",
+  "input": "Thank you for your fast answer, I will be waiting you tomorrow in the office on 10 o'clock for to sign the contract together.",
+  "output": "Thank you for your fast answer. I will be waiting for you tomorrow in the office at 10 o'clock to sign the contract together."
+ },
+ {
+  "kind": "harsh",
+  "input": "She is working in this company from five years, but she not never got a promotion, and she thinking to leave.",
+  "output": "She has been working in this company for five years, but she has never gotten a promotion, and she is thinking of leaving."
+ },
+ {
+  "kind": "harsh",
+  "input": "Hello, I am looking for the job what I can do from the home, because I have small baby and I cannot go to the office every day.",
+  "output": "Hello, I am looking for a job that I can do from home because I have a small baby and I cannot go to the office every day."
+ }
+]

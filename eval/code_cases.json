@@ -1,0 +1,430 @@
+{
+ "_about": "Adversarial cases for CodeDetector (eval/code_report.py), written by a review agent on 2026-11-16: prose that must never count as code, and code that should (reported only).",
+ "cases": [
+  {
+   "name": "slack_inline_fence",
+   "kind": "prose",
+   "text": "```git pull```\nafter that it should work. let me know if it doesn't, i'm around all afternoon and happy to pair on it\nalso the staging deploy is still broken, can someone from infra have a look when they get a chance"
+  },
+  {
+   "name": "scene_break_tilde",
+   "kind": "prose",
+   "text": "She closed the door behind her and listened to the rain.\n~~~\nthe next morning the street was quiet and the puddles had frozen over\nmarta walked to the bakery without her coat, humming the song from last night\nnobody asked where she had been"
+  },
+  {
+   "name": "discord_blockquote",
+   "kind": "prose",
+   "text": ">>> hey team, quick update\nthe meeting is moved to 3pm on thursday\nplease bring your notes from last week and the budget numbers\nthanks everyone, see you there"
+  },
+  {
+   "name": "email_nested_quote",
+   "kind": "prose",
+   "text": ">>> On Monday, John Smith wrote:\n>>> thanks for the quick turnaround on the draft\n>>> i've left a few comments in the doc, mostly small wording things\n>>> can we talk about the timeline on friday"
+  },
+  {
+   "name": "email_percent",
+   "kind": "prose",
+   "text": "anna@acme.com 20% discount applies to the whole order\nplease forward this to the rest of the purchasing team\nthe offer expires at the end of the month so let's not wait too long"
+  },
+  {
+   "name": "legal_clauses",
+   "kind": "prose",
+   "text": "(a) the Customer shall pay all fees within thirty (30) days of the invoice date;\n(b) the Supplier shall provide the Services with reasonable skill and care;\n(c) either party may terminate this Agreement on ninety (90) days' written notice;\n(d) the Customer shall not resell the Services (in whole or in part) to any third party;"
+  },
+  {
+   "name": "legal_clauses_noparen",
+   "kind": "prose",
+   "text": "(a) the Customer shall pay all fees within thirty days of the invoice date;\n(b) the Supplier shall provide the Services with reasonable skill and care;\n(c) either party may terminate this Agreement on ninety days written notice; and\n(d) the Customer shall not resell the Services to any third party."
+  },
+  {
+   "name": "pros_cons_plus",
+   "kind": "prose",
+   "text": "+ great battery life, easily two days\n+ the screen is bright enough outside\n+ customer support answered within an hour\n+ cheaper than the competition\n- a bit heavy"
+  },
+  {
+   "name": "shopping_plus",
+   "kind": "prose",
+   "text": "+ eggs\n+ oat milk\n+ two lemons\n+ sourdough bread\n+ coffee beans (the dark roast)\n+ dish soap"
+  },
+  {
+   "name": "plus_one_chat",
+   "kind": "prose",
+   "text": "+1 on this, sounds good to me\n+1, let's ship it before the holidays\n+1 from the design side too, the mocks are ready"
+  },
+  {
+   "name": "slash_sep_notes",
+   "kind": "prose",
+   "text": "week 12 // planning\nmonday // gym, groceries, call mom\ntuesday // dentist at 3, then pick up the kids\nwednesday // finish the quarterly report\nthursday // dinner with sam and alex"
+  },
+  {
+   "name": "fintwit",
+   "kind": "prose",
+   "text": "$TSLA up 8% premarket, not selling a single share\n$NVDA earnings next week, expecting a beat\nloaded up on more $AAPL on the dip today\nnot financial advice obviously"
+  },
+  {
+   "name": "recipe_ingredients",
+   "kind": "prose",
+   "text": "Ingredients\n200g (7 oz) butter (softened)\n1 1/2 cups (360 ml) warm water (110°F)\n2 cups (250 g) flour (sifted)\n1 tsp (5 g) salt (fine)\n3 eggs (room temperature)"
+  },
+  {
+   "name": "emoticons_chat",
+   "kind": "prose",
+   "text": "miss u <3 <3 <3\nsee you tomorrow at the station (^_^)\ndon't forget the snacks >:( last time you forgot\nlove you lots <3 ~~"
+  },
+  {
+   "name": "arrow_notes",
+   "kind": "prose",
+   "text": "from paris -> london on friday morning\nif the train is late -> text me\nuse the new template -> saves us a lot of time\nfor dinner -> the thai place near the hotel\ntry the museum on saturday -> book tickets first"
+  },
+  {
+   "name": "lowercase_headings",
+   "kind": "prose",
+   "text": "class notes:\nfor the trip in june:\nif you're not sure what to pack:\nwith love from all of us in berlin:\nwhile you're in town:"
+  },
+  {
+   "name": "math_homework",
+   "kind": "prose",
+   "text": "x = 3\ny = 2x + 1 = 7\narea = length * width = 12 * 4 = 48\nperimeter = 2 * (12 + 4) = 32\ntotal = 48 + 32 = 80"
+  },
+  {
+   "name": "budget_notes",
+   "kind": "prose",
+   "text": "rent = 1200\nfood = 300 (roughly)\ntransport = 90\nphone = 25\nsavings = whatever is left, hopefully 400"
+  },
+  {
+   "name": "quotes_list",
+   "kind": "prose",
+   "text": "\"The Great Gatsby\": loved the ending, 5/5 would read again\n\"Hamlet\": too long but the soliloquies are amazing\n\"Beloved\": hard to read but so worth it\n\"Middlemarch\": my favourite novel of all time"
+  },
+  {
+   "name": "itinerary_at",
+   "kind": "prose",
+   "text": "at Heathrow (10:45)\nat JFK (13:30), then the shuttle to the hotel\nat the hotel (16:00) check in and rest\nat dinner (19:30) with the client team"
+  },
+  {
+   "name": "templates_angle",
+   "kind": "prose",
+   "text": "<Customer name>\n<Order number>\nHi there, thanks for reaching out about your order\nwe're sorry it arrived late and we've issued a refund\n<Agent signature>"
+  },
+  {
+   "name": "poem_indented",
+   "kind": "prose",
+   "text": "the sea was calm that night;\n    (and the wind, the wind)\n  we walked along the shore;\n    the lamps went out (one by one)\n  and nobody spoke;"
+  },
+  {
+   "name": "poem_semicolon_paren",
+   "kind": "prose",
+   "text": "i carry your heart (i carry it in my heart);\ni am never without it (anywhere i go you go);\nand whatever is done by only me is your doing (my darling);"
+  },
+  {
+   "name": "lowercase_todo",
+   "kind": "prose",
+   "text": "- return books\n- return the parcel at the post office\n- case study: acme for the workshop\n- let go,\n- export photos from the trip"
+  },
+  {
+   "name": "lowercase_shell_words",
+   "kind": "prose",
+   "text": "make sure you bring snacks -- it's a long drive\ngo home -- now, before the storm hits\nfind me at /r/cooking, i post there a lot\nset the oven to 180 -- bake for 25 minutes\nopen /Applications and drag it to the trash"
+  },
+  {
+   "name": "bios_greater",
+   "kind": "prose",
+   "text": "make it work > make it pretty\ndone > perfect\nship it > talk about shipping it\nprogress > perfection, every single day"
+  },
+  {
+   "name": "twitter_thread",
+   "kind": "prose",
+   "text": "Thread 1: why remote work is here to stay\nThread 2: the hiring pool gets bigger when you drop the office\nThread 3: people save hours every week not commuting"
+  },
+  {
+   "name": "forwarded",
+   "kind": "prose",
+   "text": "---------- Forwarded message ---------\nFrom: Jane <jane@example.com>\nDate: Mon, Nov 16, 2026\nSubject: Re: offsite\nTo: <team@example.com>"
+  },
+  {
+   "name": "mentions_lines",
+   "kind": "prose",
+   "text": "@Sarah\n@Michael\n@Priya\ncan you all take a look at the deck before the client call? i want to make sure the numbers in slide 4 match the spreadsheet"
+  },
+  {
+   "name": "sql_caps_shout",
+   "kind": "prose",
+   "text": "FROM NOW ON I AM NOT ANSWERING EMAILS AFTER SIX\nSET YOUR OWN BOUNDARIES PEOPLE\nWHERE IS EVERYONE GOING FOR LUNCH TODAY\nLIMIT YOURSELF TO ONE COFFEE A DAY"
+  },
+  {
+   "name": "chinese_mixed",
+   "kind": "prose",
+   "text": "今天的会议改到下午三点 (room 4B)\n请大家带上笔记 -> 谢谢\n明天见 (^_^)\n我们需要讨论预算 = 很重要"
+  },
+  {
+   "name": "urls_notes",
+   "kind": "prose",
+   "text": "https://example.com/docs/getting-started?ref=nav&utm=1\nhttps://github.com/foo/bar/issues/123#issuecomment-456\nhttps://news.ycombinator.com/item?id=4242424\nthings to read later this week"
+  },
+  {
+   "name": "dialogue_smart",
+   "kind": "prose",
+   "text": "“Where were you?” she asked.\n“Out,” he said.\n“Out where?”\n“Just out.”\nShe didn't believe him, and he knew it."
+  },
+  {
+   "name": "lyrics",
+   "kind": "prose",
+   "text": "let me go,\nlet go,\nlet it be, let it be\nlet me,\nlet me go home tonight"
+  },
+  {
+   "name": "emoji_chat",
+   "kind": "prose",
+   "text": "omg 😂😂😂 (no way)\nyes way!!! <3\nsee u at 8 => dinner @ marco's\nok ok :) :) ;)"
+  },
+  {
+   "name": "meeting_arrow_caps",
+   "kind": "prose",
+   "text": "Budget -> approved, Q3\nHiring -> 2 more engineers (backend)\nOffsite -> Lisbon, June 12-14\nNext steps -> Anna sends the deck by Friday"
+  },
+  {
+   "name": "discord_greentext",
+   "kind": "prose",
+   "text": ">be me\n>wake up at 3am\n>can't sleep\n>decide to bake bread\n>bread is actually good\n>mfw"
+  },
+  {
+   "name": "quoted_reply_lines",
+   "kind": "prose",
+   "text": "> thanks for the update!\n> we'll get back to you by friday (hopefully)\nsounds good, talk then"
+  },
+  {
+   "name": "sequence_semicolons",
+   "kind": "prose",
+   "text": "when you get home (after six); feed the cat;\nif it rains (it will); take the umbrella;\nfor the party (saturday); bring wine;"
+  },
+  {
+   "name": "price_list",
+   "kind": "prose",
+   "text": "coffee $3.50 (small) / $4.50 (large)\ncroissant $2.75 (plain) / $3.25 (almond)\nbagel $3 (+$1 cream cheese)\ntea $2.50 (any kind)"
+  },
+  {
+   "name": "scores",
+   "kind": "prose",
+   "text": "Team A vs Team B (3-2)\nTeam C vs Team D (1-1)\n[final] Team A > Team C\nMVP => Lisa (2 goals)"
+  },
+  {
+   "name": "tweet_btc",
+   "kind": "prose",
+   "text": "$BTC just broke 100k, absolutely wild day in the markets and I'm not selling anything this time"
+  },
+  {
+   "name": "standup_notes",
+   "kind": "prose",
+   "text": "standup 16/11\n- anna: finished the onboarding flow, pr is up\n- ben: still blocked on the api keys -> waiting for ops\n- chris: out sick today\n- next: demo on thursday (2pm) -> everyone please join"
+  },
+  {
+   "name": "scene_break_stars",
+   "kind": "prose",
+   "text": "She closed the door behind her and listened to the rain.\n* * *\nthe next morning the street was quiet\nmarta walked to the bakery without her coat"
+  },
+  {
+   "name": "math_caps",
+   "kind": "prose",
+   "text": "Let x = 3 and y = 2x + 1.\nThen y = 7.\nSo the area is 7 * 3 = 21 square units.\nThe perimeter is 2(7 + 3) = 20 units."
+  },
+  {
+   "name": "math_steps",
+   "kind": "prose",
+   "text": "2x + 3 = 11\n2x = 8\nx = 4\ncheck: 2(4) + 3 = 11 ✓\nso the answer is x = 4"
+  },
+  {
+   "name": "lyrics_x2",
+   "kind": "prose",
+   "text": "oh oh oh (x2)\nwe were young (we were young)\nand the night was long (so long)\nhold on (hold on), hold on (hold on)"
+  },
+  {
+   "name": "todo_tasks",
+   "kind": "prose",
+   "text": "- [ ] email the landlord about the heating\n- [ ] book flights for christmas (check prices first)\n- [x] renew passport\n- [ ] dentist appointment -> call on monday"
+  },
+  {
+   "name": "single_fence_open_note",
+   "kind": "prose",
+   "text": "Here is the error I get:\n```\nTypeError: undefined is not a function\n```\nAny idea what's going on? I've been stuck on this for two days and I'm out of ideas."
+  },
+  {
+   "name": "chat_lowercase_long",
+   "kind": "prose",
+   "text": "if you're free later we could grab a coffee near the office, i'm done around five\nfor the record i still think we should go with the blue logo, it reads better on dark backgrounds\nlet me know what you think"
+  },
+  {
+   "name": "customer_support",
+   "kind": "prose",
+   "text": "Hi Maria,\n\nThanks for reaching out! I've checked your account (order #48213) and the refund was issued on Nov 12.\nIt usually takes 3-5 business days to show up.\n\nBest,\nTom"
+  },
+  {
+   "name": "email_sig_dash",
+   "kind": "prose",
+   "text": "Thanks for the update, I'll take a look tomorrow morning and get back to you with comments.\n\n-- \nAndrew Miller\nSenior Editor | Acme Press\n+1 (555) 123-4567 | andrew@acmepress.com"
+  },
+  {
+   "name": "phone_list",
+   "kind": "prose",
+   "text": "mom (555) 123-4567\ndad (555) 765-4321\ngrandma (555) 222-3333 (landline)\nvet (555) 999-0000 (after hours)"
+  },
+  {
+   "name": "hashtag_if",
+   "kind": "prose",
+   "text": "#if you know you know\n#else nothing\nlol this is my new favourite meme format, please send more"
+  },
+  {
+   "name": "spanish_mixed",
+   "kind": "prose",
+   "text": "hola equipo, mañana la reunión es a las 10 (sala 2)\nno olviden traer el informe -> es importante\ngracias!"
+  },
+  {
+   "name": "json_like_prose",
+   "kind": "prose",
+   "text": "\"Do or do not, there is no try\": Yoda\n\"I'll be back\": Terminator\n\"Here's looking at you, kid\": Casablanca"
+  },
+  {
+   "name": "semicolon_list_legal_long",
+   "kind": "prose",
+   "text": "The Licensee shall not:\n(i) copy, modify or distribute the Software;\n(ii) reverse engineer the Software (except as permitted by law);\n(iii) sublicense the Software to any third party;\n(iv) remove any proprietary notices from the Software."
+  },
+  {
+   "name": "kids_list",
+   "kind": "prose",
+   "text": "1) wake up (7:00)\n2) breakfast (7:30)\n3) school bus (8:10)\n4) piano (4pm, tuesdays)"
+  },
+  {
+   "name": "dialogue_straight",
+   "kind": "prose",
+   "text": "\"Wait,\" she said. \"Where are you going?\"\n\"Out,\" he said.\n\"Out where?\"\n\"Just out.\"\nShe didn't believe him for a second, and he knew it."
+  },
+  {
+   "name": "chat_arrow_single",
+   "kind": "prose",
+   "text": "ok so plan for tomorrow: if it rains -> museum, if not -> beach. bring sunscreen either way!!"
+  },
+  {
+   "name": "notes_eq",
+   "kind": "prose",
+   "text": "Note: ETA = Friday\nBudget = 5k (approved)\nOwner = Lisa\nStatus = on track"
+  },
+  {
+   "name": "markdown_table",
+   "kind": "prose",
+   "text": "| Day | Plan |\n|---|---|\n| Mon | Gym |\n| Tue | Dinner with Sam |\n| Wed | Rest |"
+  },
+  {
+   "name": "html_ish_email",
+   "kind": "prose",
+   "text": "<b>Reminder</b>\nthe office will be closed on friday for the holiday\nhave a great long weekend everyone"
+  },
+  {
+   "name": "gt_lt_compare",
+   "kind": "prose",
+   "text": "apples > oranges\ncats > dogs\nsummer > winter (fight me)\npizza > burgers"
+  },
+  {
+   "name": "P_slack_dollar_cmd",
+   "kind": "prose",
+   "text": "$ npm run build\nfails with a type error on my machine, works fine in CI though. any ideas? i already tried deleting node_modules and reinstalling"
+  },
+  {
+   "name": "P_slack_dollar_cmd_cap",
+   "kind": "prose",
+   "text": "$ npm run build\nThis fails with a type error on my machine, but it works fine in CI. Any ideas? I already tried deleting node_modules."
+  },
+  {
+   "name": "P_plus_sentences",
+   "kind": "prose",
+   "text": "+ The screen is bright enough to read outside.\n+ Battery easily lasts two full days of heavy use.\n+ Support answered my question within an hour."
+  },
+  {
+   "name": "C_yaml",
+   "kind": "code",
+   "text": "name: CI\non:\n  push:\n    branches: [main]\njobs:\n  build:\n    runs-on: macos-14\n    steps:\n      - uses: actions/checkout@v4\n      - run: swift build\n      - run: swift test"
+  },
+  {
+   "name": "C_python_comments",
+   "kind": "code",
+   "text": "# load the config\n# then run the checks\nimport os\n\n# main entry point\ndef main():\n    # read the file\n    path = os.environ['CFG']\n    print(path)\n"
+  },
+  {
+   "name": "C_css",
+   "kind": "code",
+   "text": ".card {\n  display: flex;\n  padding: 12px 16px;\n  border-radius: 8px;\n}\n.card:hover {\n  background: #f5f5f5;\n}"
+  },
+  {
+   "name": "C_log",
+   "kind": "code",
+   "text": "2026-11-16 10:42:01.123 INFO  server started on port 8080\n2026-11-16 10:42:03.456 WARN  slow request GET /api/users took 1203ms\n2026-11-16 10:42:05.789 ERROR connection reset by peer"
+  },
+  {
+   "name": "C_diff",
+   "kind": "code",
+   "text": "diff --git a/foo.swift b/foo.swift\n--- a/foo.swift\n+++ b/foo.swift\n@@ -1,4 +1,4 @@\n-let x = 1\n+let x = 2\n print(x)"
+  },
+  {
+   "name": "C_csv",
+   "kind": "code",
+   "text": "id,name,email,created_at\n1,Alice,alice@example.com,2026-01-02\n2,Bob,bob@example.com,2026-01-03\n3,Carol,carol@example.com,2026-01-04"
+  },
+  {
+   "name": "C_dockerfile",
+   "kind": "code",
+   "text": "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY . .\nCMD [\"python\", \"main.py\"]"
+  },
+  {
+   "name": "C_toml",
+   "kind": "code",
+   "text": "[package]\nname = \"proofreader\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }"
+  },
+  {
+   "name": "C_latex",
+   "kind": "code",
+   "text": "\\begin{equation}\n  E = mc^2\n\\end{equation}\n\\section{Introduction}\nWe study the problem of \\textbf{local} grammar checking."
+  },
+  {
+   "name": "C_go",
+   "kind": "code",
+   "text": "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}"
+  },
+  {
+   "name": "C_rust",
+   "kind": "code",
+   "text": "fn main() {\n    let v: Vec<i32> = vec![1, 2, 3];\n    for x in &v {\n        println!(\"{}\", x);\n    }\n}"
+  },
+  {
+   "name": "C_ruby",
+   "kind": "code",
+   "text": "class User < ApplicationRecord\n  has_many :posts\n  validates :email, presence: true\n\n  def full_name\n    \"#{first} #{last}\"\n  end\nend"
+  },
+  {
+   "name": "C_sql_lower",
+   "kind": "code",
+   "text": "select id, name\nfrom users u\njoin orders o on o.user_id = u.id\nwhere o.total > 100\norder by name;"
+  },
+  {
+   "name": "C_terminal_session",
+   "kind": "code",
+   "text": "andrey@mac ~/Projects % git status\nOn branch master\nChanges not staged for commit:\n  modified:   App/Sources/Proofreader/AppDelegate.swift\n\nno changes added to commit"
+  },
+  {
+   "name": "C_python_traceback",
+   "kind": "code",
+   "text": "Traceback (most recent call last):\n  File \"main.py\", line 3, in <module>\n    main()\n  File \"main.py\", line 2, in main\n    raise ValueError(\"bad\")\nValueError: bad"
+  },
+  {
+   "name": "C_haskell",
+   "kind": "code",
+   "text": "module Main where\n\nmain :: IO ()\nmain = do\n  let xs = [1..10]\n  print (sum xs)"
+  },
+  {
+   "name": "C_ini",
+   "kind": "code",
+   "text": "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n[remote \"origin\"]\n\turl = git@github.com:foo/bar.git"
+  },
+  {
+   "name": "C_jsx",
+   "kind": "code",
+   "text": "export default function App() {\n  return (\n    <div className=\"app\">\n      <Header title=\"Hi\" />\n      <Main />\n    </div>\n  );\n}"
+  }
+ ]
+}

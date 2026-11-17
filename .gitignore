@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+.build/
+DerivedData/
+xcuserdata/
+*.gguf
+.deps/
+Vendor/
+build/
