@@ -22,8 +22,7 @@ MainActor.assumeIsolated {
         let pane = args.indices.contains(i + 1) ? SettingsPane(rawValue: args[i + 1]) : nil
         SettingsDemo.show(pane: pane ?? .general, dark: args.contains("--dark"),
                           recording: args.contains("--recording"), bubble: args.contains("--bubble"),
-                          licenceState: args.firstIndex(of: "--licence-state").flatMap {
-                              args.indices.contains($0 + 1) ? args[$0 + 1] : nil })
+                          licenceState: LicenceDemo.state(from: args))
         app.run()
         return
     }
@@ -35,6 +34,21 @@ MainActor.assumeIsolated {
         let step = OnboardingStep.allCases.first { "\($0)" == name } ?? .welcome
         OnboardingDemo.show(step: step, dark: args.contains("--dark"), trusted: args.contains("--trusted"),
                             downloading: args.contains("--downloading"))
+        app.run()
+        return
+    }
+    // `.build/debug/Meboki --trial-ended-demo [--revoked|--expired] [--dark]`: the licence notice window.
+    if CommandLine.arguments.contains("--trial-ended-demo") {
+        let args = CommandLine.arguments
+        TrialEndedDemo.show(variant: args.contains("--revoked") ? .revoked : args.contains("--expired") ? .expired : .trialEnded,
+                            dark: args.contains("--dark"))
+        app.run()
+        return
+    }
+    // `.build/debug/Meboki --popover-demo [--licence-state …] [--dark]`: the menu-bar popover under a fake icon.
+    if CommandLine.arguments.contains("--popover-demo") {
+        PopoverDemo.show(licenceState: LicenceDemo.state(from: CommandLine.arguments),
+                         dark: CommandLine.arguments.contains("--dark"))
         app.run()
         return
     }

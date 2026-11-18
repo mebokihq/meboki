@@ -254,6 +254,17 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(revokedNoticeShownKid, forKey: Key.revokedNoticeShownKid) }
     }
 
+    /// The three notice flags as one value, for `LicenceNotices` (Core).
+    var noticeFlags: LicenceNoticeFlags {
+        get { LicenceNoticeFlags(trialEndNoticeShown: trialEndNoticeShown, lastDayNoticeShown: lastDayNoticeShown,
+                                 revokedNoticeShownKid: revokedNoticeShownKid) }
+        set {
+            trialEndNoticeShown = newValue.trialEndNoticeShown
+            lastDayNoticeShown = newValue.lastDayNoticeShown
+            revokedNoticeShownKid = newValue.revokedNoticeShownKid
+        }
+    }
+
     /// Debug reset of the one-shot notices.
     func resetLicenceNotices() {
         trialEndNoticeShown = false

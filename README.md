@@ -80,6 +80,12 @@ Layout:
 - `App/Sources/Meboki/Design` — design tokens and shared UI components.
 - `eval/` — model/prompt benchmark. Run it before changing the prompt, filters, or model files.
 
+## Trial, free mode and licence
+
+Meboki is open source (GPL-3.0). The signed app has a 7-day full trial, counting only days on which you check text. After the trial it keeps working in **free mode**: the shortcut (⌃⌥G by default) checks any field, with every model and your own API key, and applying fixes and every privacy setting stay free. Underlines as you type, the bubble and island popups, Check level, Check for, Casual mode and per-app On and Casual need a licence. Your settings are kept in free mode and come back with a licence.
+
+Enter a key in Settings › Licence (or open the `meboki://` link from the purchase page). The key is checked on this Mac, offline: there is no account and no sign-in. With a licence installed Meboki downloads the public list of refunded keys from meboki.com once a day; nothing about you or your key is sent.
+
 ## Known limits (Milestone A)
 
 - Works where the app exposes the field's text through Accessibility: native apps, Safari, Chrome, most Electron apps. Not Google Docs or other canvas editors.

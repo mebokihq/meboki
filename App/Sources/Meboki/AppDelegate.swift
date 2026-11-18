@@ -55,6 +55,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Polls the Accessibility permission while it's off (`watchTrust`).
     private var trustTimer: Timer?
     private let toasts = ToastPanel()
+    private var noticeWindow: TrialEndedWindowController?
+    private var lastDayRetryPending = false
     /// The island HUD (popup style `island`, design_code.md §5.6): checking, review, done and messages.
     private let island = IslandPanel()
     private let overlay = UnderlineOverlay()
@@ -381,6 +383,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             openSettings: { [weak self] in self?.showSettings() },
             openGeneral: { [weak self] in self?.showSettings(pane: .general) },
             openModels: { [weak self] in self?.showSettings(pane: .models) },
+            openLicence: { [weak self] in self?.showLicence() },
             quit: { NSApp.terminate(nil) }))
         refreshStatus()
     }
@@ -407,6 +410,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .store(in: &settingsObservers)
         Log.write("licence: \(LicenceManager.describe(licence.entitlement))")
         licence.start()
+        // A check counting today changes the trial clock without changing the entitlement.
+        licence.$trial.dropFirst().receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.showDueLicenceNotices() }
+            .store(in: &settingsObservers)
+        // At launch: once everything else is up (and after onboarding, which calls this again when it closes).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showDueLicenceNotices() }
     }
 
     /// The entitlement changed (activation, removal, trial end, a new day, the revoked list). The running app
@@ -416,8 +425,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.entitlement = new
         updateAutoCheck()
         appModesChanged()
-        // A4 plugs in here: the trial-ended and revoked notices (`trialEndNoticeShown`, `revokedNoticeShownKid`)
-        // and the last-day toast (`lastDayNoticeShown`), decided from `old` and `new`.
+        if new.isFull { noticeWindow?.close() }  // a key was activated while the notice was open
+        showDueLicenceNotices()
+    }
+
+    // MARK: Licence notices (PLAN.md §6 "Where the user meets the paywall")
+
+    /// The one-time window notice ("Your trial has ended" / "no longer valid") and the last-day toast, whichever
+    /// is due. Safe to call again and again: `LicenceNotices` (Core) decides from the current state and the flags,
+    /// and each notice sets its flag when it is shown. Called at launch, on every entitlement change, when the
+    /// trial clock changes and when onboarding closes.
+    private func showDueLicenceNotices() {
+        guard noticeWindow?.isVisible != true else { return }
+        let busy = !settings.onboardingDone || onboarding?.isVisible == true
+        if let notice = LicenceNotices.windowNotice(entitlement: licence.entitlement, kid: licence.storedKid,
+                                                    flags: settings.noticeFlags, onboardingBusy: busy) {
+            settings.noticeFlags = settings.noticeFlags.marking(notice)
+            showLicenceNotice(notice)
+            return
+        }
+        showLastDayToastWhenIdle()
+    }
+
+    private func showLicenceNotice(_ notice: LicenceNotice) {
+        let variant: LicenceNoticeVariant
+        switch notice {
+        case .trialEnded: variant = .trialEnded
+        case .revoked: variant = .revoked
+        case .expired: variant = .expired
+        }
+        Log.write("licence: notice shown (\(variant))")
+        let w = TrialEndedWindowController(
+            variant: variant, hotkey: settings.hotkey.display,
+            actions: LicenceNoticeActions(
+                buy: { NSWorkspace.shared.open(LicenceManager.buyURL) },
+                enterKey: { [weak self] in self?.showLicence() },
+                continueFree: {}))
+        w.onClose = { [weak self] in self?.noticeWindow = nil }
+        noticeWindow = w
+        w.show()
+    }
+
+    /// The last trial day, after its first check: one toast, once. It waits while a check runs or a popup,
+    /// message or the menu-bar popover is on screen, and tries again every 2 s (up to 10 minutes).
+    private func showLastDayToastWhenIdle(attempt: Int = 0) {
+        let busy = !settings.onboardingDone || onboarding?.isVisible == true
+        guard LicenceNotices.lastDayToastDue(entitlement: licence.entitlement,
+                                             isLastTrialDay: licence.isLastTrialDay && licence.trialTodayCounted,
+                                             flags: settings.noticeFlags, onboardingBusy: busy) else { return }
+        let idle = !isChecking && checkTask == nil && !popup.isVisible && !island.isVisible && !toasts.isVisible
+            && !popover.isVisible && noticeWindow == nil
+        guard idle else {
+            guard attempt < 300, !lastDayRetryPending else { return }
+            lastDayRetryPending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self else { return }
+                self.lastDayRetryPending = false
+                self.showLastDayToastWhenIdle(attempt: attempt + 1)
+            }
+            return
+        }
+        settings.lastDayNoticeShown = true
+        Log.write("licence: last-day toast shown")
+        toast(.info, "Last day of the full trial",
+              detail: "From tomorrow Meboki checks only on \(settings.hotkey.display)",
+              symbol: "clock", actionTitle: "Details", action: { [weak self] in self?.showLicence() },
+              near: nil, duration: 10)
     }
 
     /// `meboki://activate?key=…`, from the purchase page, or launched by it. The URL is untrusted input: only the
@@ -568,6 +641,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             useModel: { [weak self] m in self?.selectModel(m) },
             pause: { [weak self] m in self?.store.pause(m) },
             openSettings: { [weak self] pane in self?.showSettings(pane: pane) },
+            openLicence: { [weak self] in self?.showLicence() },
             tryCheck: { [weak self] text in
                 guard let self else { return [] }
                 return try await self.tryCheck(text)
@@ -596,6 +670,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if let app = self.targetApp, !app.isTerminated, app.bundleIdentifier != "com.apple.systempreferences" {
                 app.activate()
             }
+            DispatchQueue.main.async { self.showDueLicenceNotices() }
         }
         return c
     }

@@ -29,6 +29,8 @@ struct OnboardingRootView: View {
                     .id(t.id)
             }
         }
+        .environment(\.licenceGate, LicenceGate(locked: !settings.entitlement.isFull,
+                                                open: { model.actions.openLicence() }))
         .ignoresSafeArea()
     }
 
@@ -113,7 +115,7 @@ struct OnboardingRootView: View {
 // MARK: - Shared pieces
 
 /// Page title block: a 44 pt colored icon square, a 22 pt bold title and a secondary subtitle.
-private struct PageHeader: View {
+struct PageHeader: View {
     let symbol: String
     let color: UInt32
     let title: String
@@ -181,7 +183,7 @@ private struct NumberedStep: View {
 }
 
 /// A rounded box with the settings group look.
-private struct Box<Content: View>: View {
+struct Box<Content: View>: View {
     var padding: CGFloat = 14
     @ViewBuilder var content: Content
     var body: some View {
@@ -798,16 +800,28 @@ private struct WrapLayout: Layout {
 /// The correction popup: a live preview of the picked style, and the three styles to pick from.
 private struct PopupStylePage: View {
     @ObservedObject var settings: AppSettings
+    @Environment(\.licenceGate) private var gate
+    @State private var lockedPopover: PopupStyle?
 
     var body: some View {
         PageBody {
             PageHeader(symbol: "rectangle.on.rectangle", color: 0xFF9F0A, title: "Choose how fixes appear",
                        subtitle: "Pick a style to see it in action. You can change it any time in Settings › General.")
-            PopupPreview(style: settings.popupStyle, reasons: settings.explainFixes)
+            PopupPreview(style: gate.locked ? .card : settings.popupStyle, reasons: settings.explainFixes)
                 .dsShadow(DS.windowShadow)
             HStack(spacing: 10) {
                 ForEach(PopupStyle.allCases, id: \.self) { s in
-                    StyleChoice(style: s, selected: s == settings.popupStyle) { settings.popupStyle = s }
+                    // Free mode: only the glass card can be picked; the others are locked (the stored choice stays).
+                    let locked = gate.locked && s != .card
+                    StyleChoice(style: s, selected: gate.locked ? s == .card : s == settings.popupStyle,
+                                locked: locked) {
+                        if locked { lockedPopover = s } else { settings.popupStyle = s }
+                    }
+                    .popover(isPresented: Binding(get: { lockedPopover == s },
+                                                  set: { if !$0 && lockedPopover == s { lockedPopover = nil } }),
+                             arrowEdge: .bottom) {
+                        NeedsLicencePopover(open: gate.open) { lockedPopover = nil }
+                    }
                 }
             }
             .padding(.top, 16)
@@ -818,6 +832,7 @@ private struct PopupStylePage: View {
 private struct StyleChoice: View {
     let style: PopupStyle
     let selected: Bool
+    var locked = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -833,12 +848,19 @@ private struct StyleChoice: View {
         let shape = RoundedRectangle(cornerRadius: DS.Radius.suggestion, style: .continuous)
         Button(action: action) {
             HStack(alignment: .top, spacing: 9) {
-                RadioDot(isOn: selected).padding(.top, 1)
+                if locked {
+                    // Free mode: a lock where the radio dot would be.
+                    Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(DS.textSecondary).frame(width: 16, height: 16).padding(.top, 1)
+                } else {
+                    RadioDot(isOn: selected).padding(.top, 1)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(style.title).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
                     Text(subtitle).font(DS.Font.caption).foregroundStyle(DS.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .opacity(locked ? 0.5 : 1)
                 Spacer(minLength: 0)
             }
             .padding(10)
@@ -849,7 +871,7 @@ private struct StyleChoice: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityLabel(style.title)
+        .accessibilityLabel(locked ? "\(style.title), needs a licence" : style.title)
         .accessibilityHint(subtitle)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
@@ -881,6 +903,7 @@ private struct DonePage: View {
                     SettingsRow("Underline mistakes as I type",
                                 subtitle: "Checks text areas after you pause typing (local model)") {
                         SettingsSwitch(isOn: $settings.underlineAsYouType, label: "Underline mistakes as I type")
+                            .licenceLocked(.automaticCheck)
                     }
                     SettingsDivider()
                     SettingsRow("Launch at login", subtitle: "Start Meboki when you log in") {
@@ -888,9 +911,35 @@ private struct DonePage: View {
                     }
                 }
             }
+            licenceCard.padding(.top, 14)
             Spacer(minLength: 0)
             SettingsFootnote(symbol: "gearshape", text: "Everything else is in Settings: languages, apps, models and shortcuts.") {
                 Button("Open Settings") { model.actions.openSettings(.general) }.buttonStyle(.dsLink)
+            }
+        }
+    }
+
+    // MARK: Licence card (PLAN.md §6 "Where the user meets the paywall")
+
+    private var hotkey: String { settings.hotkey.display }
+
+    @ViewBuilder private var licenceCard: some View {
+        switch settings.entitlement {
+        case .licensed(let info):
+            LicenceCard(symbol: "checkmark.seal.fill", tint: DS.ok, title: "Licensed to \(info.email)",
+                        text: "Everything is unlocked. Thank you.")
+        case .trial(let left):
+            LicenceCard(symbol: "sparkles", tint: DS.brand,
+                        title: left >= 7 ? "Everything is unlocked for 7 days"
+                            : left <= 1 ? "Everything is unlocked · last trial day"
+                            : "Everything is unlocked · \(left) trial days left",
+                        text: "Only days you check text count. After that Meboki keeps working in free mode: \(hotkey) checks any field, with every model, for as long as you like. No account, no card.") {
+                Button("I have a licence key") { model.actions.openLicence() }.buttonStyle(.dsLink).padding(.leading, -6)
+            }
+        case .free:
+            LicenceCard(symbol: "lock.fill", tint: DS.textSecondary, title: "Free mode",
+                        text: "\(hotkey) checks any field, with every model. Underlines as you type and the bubble and island popups need a licence.") {
+                Button("See Licence") { model.actions.openLicence() }.buttonStyle(.dsLink).padding(.leading, -6)
             }
         }
     }
@@ -924,4 +973,42 @@ private struct DonePage: View {
 extension OnboardingModel {
     /// The "Try it" sample: a few common mistakes the default models fix.
     static let sample = "Their going to the libary tomorow, but she dont know were it is."
+}
+
+/// The Done page's licence card: a tinted badge, a title, one paragraph and an optional quiet link.
+private struct LicenceCard<Extra: View>: View {
+    let symbol: String
+    let tint: Color
+    let title: String
+    let text: String
+    @ViewBuilder var extra: Extra
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Circle().fill(tint.opacity(0.16))
+                .overlay(Image(systemName: symbol).font(.system(size: 14, weight: .semibold)).foregroundStyle(tint))
+                .frame(width: 32, height: 32)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
+                Text(text)
+                    .font(DS.Font.link)
+                    .foregroundStyle(DS.textSecondary)
+                    .lineSpacing(1.5)
+                    .fixedSize(horizontal: false, vertical: true)
+                extra
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: DS.Radius.group, style: .continuous).fill(tint.opacity(0.07)))
+        .accessibilityElement(children: .contain)
+    }
+}
+
+extension LicenceCard where Extra == EmptyView {
+    init(symbol: String, tint: Color, title: String, text: String) {
+        self.init(symbol: symbol, tint: tint, title: title, text: text) { EmptyView() }
+    }
 }

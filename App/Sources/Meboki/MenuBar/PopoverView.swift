@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MebokiCore
 import SwiftUI
 
@@ -39,6 +40,8 @@ final class PopoverModel: ObservableObject {
     @Published var appBundleID: String?
     /// The global hotkey, as keycap glyphs.
     @Published var hotkey = "⌃⌥G"
+    /// "Trial · 4 days left" while the trial runs (nil otherwise). `PopoverPanel` keeps it current.
+    @Published var trialText: String?
 }
 
 struct PopoverActions {
@@ -48,6 +51,8 @@ struct PopoverActions {
     /// The gear: Settings › General.
     var openGeneral: () -> Void = {}
     var openModels: () -> Void = {}
+    /// Settings › Licence (the trial line, "Unlock", a locked control).
+    var openLicence: () -> Void = {}
     var quit: () -> Void = {}
 }
 
@@ -74,9 +79,11 @@ struct PopoverView: View {
         VStack(alignment: .leading, spacing: 8) {
             header
             checkButton
+            freeModeRow
             tiles
             modelRow
             menuRows
+            trialRow
             PrivacyLine(text: model.cloudProvider.map { "Cloud: text you check goes to \($0)" } ?? "Your text stays on this Mac",
                         symbol: model.cloudProvider == nil ? "lock" : "cloud")
                 .frame(maxWidth: .infinity)
@@ -158,15 +165,58 @@ struct PopoverView: View {
         .dsKeyLabel("Check focused field", kbd: model.hotkey)
     }
 
+    // MARK: Licence (PLAN.md §6 "Where the user meets the paywall")
+
+    private var locked: Bool { !settings.entitlement.isFull }
+
+    /// Free mode: what it means, and a way out.
+    @ViewBuilder private var freeModeRow: some View {
+        if locked {
+            HStack(spacing: 8) {
+                Image(systemName: "lock.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(DS.textSecondary)
+                Text("Free mode · checks only on \(model.hotkey)")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(DS.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
+                Spacer(minLength: 0)
+                Button("Unlock", action: actions.openLicence).buttonStyle(.ds(.primary, small: true))
+            }
+            .padding(.leading, 6)
+            .accessibilityElement(children: .contain)
+        }
+    }
+
+    /// The trial: a quiet line that opens Settings › Licence.
+    @ViewBuilder private var trialRow: some View {
+        if let text = model.trialText, settings.entitlement.isFull {
+            Button(action: actions.openLicence) {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock").font(.system(size: 10))
+                    Text(text)
+                }
+                .font(DS.Font.caption)
+                .foregroundStyle(DS.textSecondary)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(text)
+            .accessibilityHint("Opens Settings, Licence")
+        }
+    }
+
     // MARK: Tiles
 
     private var tiles: some View {
         VStack(spacing: 6) {
             HStack(spacing: 6) {
                 // Milestone B (§8.1): a review started with the hotkey follows typing.
-                ToggleTile(symbol: "underline", title: "Underline as I type",
-                           state: settings.underlineAsYouType ? "On" : "Off", isOn: settings.underlineAsYouType) {
-                    settings.underlineAsYouType.toggle()
+                // Free mode: locked, a click goes to Settings › Licence (the stored value is kept).
+                ToggleTile(symbol: locked ? "lock.fill" : "underline", title: "Underline as I type",
+                           state: locked ? "Needs a licence" : settings.underlineAsYouType ? "On" : "Off",
+                           isOn: !locked && settings.underlineAsYouType, dimmed: locked) {
+                    if locked { actions.openLicence() } else { settings.underlineAsYouType.toggle() }
                 }
                 pauseTile
             }
@@ -176,10 +226,14 @@ struct PopoverView: View {
                                 options: EnglishVariant.allCases.map { ($0, $0.rawValue) })
                 }
                 DSSeparator().padding(.horizontal, 12)
-                WideRow(title: "Check") {
+                WideRow(title: "Check", locked: locked) {
                     DSSegmented(selection: $settings.checkLevel,
                                 options: CheckLevel.allCases.map { ($0, $0.title) })
+                        .opacity(locked ? 0.5 : 1)
+                        .allowsHitTesting(!locked)
                 }
+                .contentShape(Rectangle())
+                .onTapGesture { if locked { actions.openLicence() } }
             }
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DS.control))
         }
@@ -273,6 +327,7 @@ private struct ToggleTile: View {
     let title: String
     let state: String
     let isOn: Bool
+    var dimmed = false
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
 
@@ -297,7 +352,7 @@ private struct ToggleTile: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DS.control))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .opacity(isEnabled ? 1 : 0.55)
+            .opacity(isEnabled && !dimmed ? 1 : 0.55)
         }
         .buttonStyle(PressScaleStyle(hoverBrightness: true))
         .accessibilityElement(children: .ignore)
@@ -310,17 +365,19 @@ private struct ToggleTile: View {
 /// A row in the settings group: label on the left, a control on the right. Padding 5 6 5 12.
 private struct WideRow<Control: View>: View {
     let title: String
+    var locked = false
     @ViewBuilder let control: Control
 
     var body: some View {
         HStack(spacing: 8) {
             Text(title).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(DS.text)
+            if locked { LockBadge(caption: false) }
             Spacer(minLength: 0)
             control
         }
         .padding(EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 6))
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
+        .accessibilityLabel(locked ? "\(title), needs a licence" : title)
     }
 }
 
@@ -396,16 +453,35 @@ final class PopoverPanel {
     private var keyMonitor: Any?
     private var mouseMonitor: Any?
     private var generation = 0
+    private var licenceSub: AnyCancellable?
 
-    init(settings: AppSettings) {
+    init(settings: AppSettings, licence: LicenceManager? = nil) {
+        let licence = licence ?? LicenceManager.shared
         self.settings = settings
         hosted = HostedPanel(PopoverRoot(model: model, settings: settings, appear: appear), canBecomeKey: true)
         panel.level = .statusBar
         panel.setAccessibilityLabel("Meboki")
+        licenceSub = licence.$trial.combineLatest(licence.$entitlement)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak licence] _, _ in
+                guard let self, let licence else { return }
+                self.model.trialText = Self.trialText(licence)
+            }
     }
 
     var isVisible: Bool { panel.isVisible }
     var windowNumber: Int { panel.windowNumber }
+    #if DEBUG
+    var debugWindow: NSWindow? { panel }
+    #endif
+
+    /// "Trial · 4 days left", "Trial · last day", "Trial · 7 days" (nothing checked yet); nil outside the trial.
+    static func trialText(_ licence: LicenceManager) -> String? {
+        guard case .trial(let left) = licence.entitlement else { return nil }
+        if licence.isLastTrialDay { return "Trial · last day" }
+        if licence.trialDaysUsed == 0 { return "Trial · \(left) days" }
+        return "Trial · \(left) \(left == 1 ? "day" : "days") left"
+    }
 
     /// Each action closes the popover first.
     func setActions(_ a: PopoverActions) {
@@ -414,6 +490,7 @@ final class PopoverPanel {
             openSettings: { [weak self] in self?.hide(animated: false); a.openSettings() },
             openGeneral: { [weak self] in self?.hide(animated: false); a.openGeneral() },
             openModels: { [weak self] in self?.hide(animated: false); a.openModels() },
+            openLicence: { [weak self] in self?.hide(animated: false); a.openLicence() },
             quit: { a.quit() })
     }
 

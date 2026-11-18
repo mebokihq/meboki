@@ -42,6 +42,8 @@ struct OnboardingActions {
     var useModel: (ModelInfo) -> Void = { _ in }
     var pause: (ModelInfo) -> Void = { _ in }
     var openSettings: (SettingsPane) -> Void = { _ in }
+    /// Settings › Licence (the Done page's key link and locked controls).
+    var openLicence: () -> Void = {}
     /// Checks a sample text with the current model (no field, no Accessibility). Edits are relative to the text.
     var tryCheck: (String) async throws -> [Edit] = { _ in [] }
     /// Opens a practice note in TextEdit, to try the shortcut in a real app.
@@ -127,6 +129,9 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { window?.isVisible == true }
     var windowNumber: Int { window?.windowNumber ?? -1 }
+    #if DEBUG
+    var debugWindow: NSWindow? { window }
+    #endif
 
     func show(activate: Bool = true) {
         let w = window ?? makeWindow()

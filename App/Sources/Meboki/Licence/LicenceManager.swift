@@ -79,6 +79,13 @@ final class LicenceManager: ObservableObject {
         return false
     }
     var trialDaysUsed: Int { trial.days.count }
+    /// Today already counts as a trial day (a check ran today).
+    var trialTodayCounted: Bool { trial.days.contains(trial.today(now: now(), calendar: calendar)) }
+    /// The ID of the stored key when it verifies (also when it is revoked or expired), for the per-key notice.
+    var storedKid: String? {
+        if case .success(let info)? = key { return info.kid }
+        return nil
+    }
 
     // MARK: Init
 
