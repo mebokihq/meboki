@@ -82,6 +82,10 @@ Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   LanguageGate.swift            text that isn't English (NLLanguageRecognizer, precision-first rules): not sent when "Skip text that isn't English" is on
   RewriteDetector.swift         rewrite detection (guards measured with `eval/rewrite_report.py`)
   SpellingVariant.swift         US/UK respelling pairs (never respell a correct word into the other variant)
+  Licence.swift                 LicenceKey (clean pasted text, verify `MEBOKI-` key offline with Ed25519 via CryptoKit), LicenceInfo, LicenceError, LicenceText (all licence strings)
+  RevokedList.swift             signed list of refunded key IDs: parse + verify, newest `issued` wins
+  TrialClock.swift              7 active days (local `yyyy-MM-dd`), rollback-proof, merge of two stores
+  Entitlement.swift             licensed / trial / free from key + revoked list + trial; Feature; effective settings in free mode (level, app mode, casual, automatic check)
 Packages/Core/Tests/            Swift Testing suites
 App/Info.plist                  bundle ID dev.local.meboki, LSUIElement
 Scripts/build-llama-server.sh   static Metal llama-server (llama.cpp, no OpenSSL) → Vendor/bin/
