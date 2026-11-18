@@ -192,6 +192,10 @@ extension ButtonStyle where Self == DSLinkButtonStyle {
 struct DSSegmented<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [(value: Value, label: String)]
+    /// Options that can't be picked now (free mode): drawn dimmed with a lock; a tap calls `onLockedTap` and
+    /// leaves the selection alone.
+    var locked: Set<Value> = []
+    var onLockedTap: () -> Void = {}
     @Namespace private var thumb
 
     var body: some View {
@@ -199,9 +203,14 @@ struct DSSegmented<Value: Hashable>: View {
             ForEach(options.indices, id: \.self) { i in
                 let option = options[i]
                 let selected = option.value == selection
-                Text(option.label)
+                let isLocked = locked.contains(option.value)
+                HStack(spacing: 4) {
+                    if isLocked { Image(systemName: "lock.fill").font(.system(size: 8, weight: .semibold)) }
+                    Text(option.label)
+                }
                     .font(DS.Font.small)
                     .foregroundStyle(DS.text)
+                    .opacity(isLocked ? 0.5 : 1)
                     .lineLimit(1)
                     .padding(.vertical, 4)
                     .padding(.horizontal, 12)
@@ -215,15 +224,17 @@ struct DSSegmented<Value: Hashable>: View {
                     }
                     .contentShape(Capsule())
                     .onTapGesture {
+                        if isLocked { onLockedTap(); return }
                         withAnimation(DS.Motion.reduceMotion ? nil : .snappy(duration: 0.2)) { selection = option.value }
                     }
                     .accessibilityElement()
-                    .accessibilityLabel(option.label)
+                    .accessibilityLabel(isLocked ? "\(option.label), needs a licence" : option.label)
                     .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
         .padding(2)
         .background(Capsule().fill(DS.control))
+        .fixedSize()
     }
 }
 

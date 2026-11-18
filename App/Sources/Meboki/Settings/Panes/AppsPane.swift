@@ -10,6 +10,9 @@ struct AppsPane: View {
     @ObservedObject var settings: AppSettings
     /// Installed apps on the skip list (bundle ID → name), found when the pane opens.
     @State private var installedSkipped: [String: String] = [:]
+    @Environment(\.licenceGate) private var gate
+    /// The row whose locked segment was clicked (shows the "Needs a licence" popover).
+    @State private var lockedPopover: String?
 
     private struct App: Identifiable {
         let id: String
@@ -50,6 +53,7 @@ struct AppsPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            FreeModeBanner()
             SettingsGroupHeader("Check text in", first: true)
             SettingsGroup {
                 let list = apps
@@ -96,6 +100,10 @@ struct AppsPane: View {
                 AppIcon(bundleID: app.id, name: app.name)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(app.name).font(DS.Font.bodyMedium).foregroundStyle(DS.text).lineLimit(1)
+                    if gate.locked, mode != settings.effectiveAppMode(app.id) {
+                        Text("Acts as Manual for now")
+                            .font(DS.Font.caption).foregroundStyle(DS.textSecondary).lineLimit(1)
+                    }
                     if let subtitle {
                         HStack(spacing: 2) {
                             Text(mode == defaultMode ? subtitle : "\(subtitle) · default \(defaultMode.title)")
@@ -114,7 +122,14 @@ struct AppsPane: View {
             DSSegmented(selection: Binding(get: { settings.appMode(app.id) },
                                            set: { if $0 != settings.appMode(app.id) {
                                                settings.setAppMode($0, bundleID: app.id) } }),
-                        options: AppMode.allCases.map { ($0, $0.title) })
+                        options: AppMode.allCases.map { ($0, $0.title) },
+                        locked: gate.locked ? [.on, .casual] : [],
+                        onLockedTap: { lockedPopover = app.id })
+                .popover(isPresented: Binding(get: { lockedPopover == app.id },
+                                              set: { if !$0 && lockedPopover == app.id { lockedPopover = nil } }),
+                         arrowEdge: .bottom) {
+                    NeedsLicencePopover(open: gate.open) { lockedPopover = nil }
+                }
         })
         .accessibilityLabel(subtitle.map { "\(app.name), \($0)" } ?? app.name)
     }

@@ -22,6 +22,11 @@ struct PrivacyPane: View {
                     Pill("huggingface.co")
                 }
                 SettingsDivider()
+                SettingsRow("Licence check",
+                            subtitle: "With a licence, Meboki downloads the public list of refunded keys from meboki.com once a day. Nothing about you or your key is sent.") {
+                    Pill("meboki.com")
+                }
+                SettingsDivider()
                 SettingsRow(leading: {
                     SettingsLabel(title: "Logs", subtitle: "~/Library/Logs/Meboki/", monospacedSubtitle: true)
                 }, control: {

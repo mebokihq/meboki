@@ -7,11 +7,12 @@ struct GeneralPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            FreeModeBanner()
             SettingsGroupHeader("Correction popup", first: true)
             SettingsGroup {
                 PopupStylePicker(selection: $settings.popupStyle)
                 // A looping demo of the picked style, as in the HTML reference.
-                PopupPreview(style: settings.popupStyle, reasons: settings.explainFixes)
+                PopupPreview(style: settings.effectivePopupStyle, reasons: settings.explainFixes)
                     .padding(EdgeInsets(top: 0, leading: 14, bottom: 14, trailing: 14))
                 SettingsDivider()
                 SettingsRow("Return key", subtitle: "⏎ applies all fixes. ⇧⏎ applies only the current one.") {
@@ -39,6 +40,7 @@ struct GeneralPane: View {
                 SettingsRow("Underline mistakes as I type",
                             subtitle: "Checks the text area you type in when you pause, no shortcut needed, and keeps the underlines up to date. Local model only") {
                     SettingsSwitch(isOn: $settings.underlineAsYouType, label: "Underline mistakes as I type")
+                        .licenceLocked(.automaticCheck)
                 }
             }
 
@@ -96,13 +98,28 @@ struct HotkeyField: View {
 // MARK: - Popup style picker
 
 /// Three cards in a 3-column grid, gap 12, padding 14 (§8.1).
+/// In free mode only the glass card can be picked: it carries the ring, the stored choice (bubble or island)
+/// keeps a dashed ring and "Your choice", and a click on a locked card opens the "Needs a licence" popover.
 struct PopupStylePicker: View {
     @Binding var selection: PopupStyle
+    @Environment(\.licenceGate) private var gate
+    @State private var lockedPopover: PopupStyle?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             ForEach(PopupStyle.allCases, id: \.self) { style in
-                PickerCard(style: style, selected: style == selection) { selection = style }
+                let locked = gate.locked && style != .card
+                PickerCard(style: style,
+                           selected: gate.locked ? style == .card : style == selection,
+                           locked: locked,
+                           stored: locked && style == selection) {
+                    if locked { lockedPopover = style } else { selection = style }
+                }
+                .popover(isPresented: Binding(get: { lockedPopover == style },
+                                              set: { if !$0 && lockedPopover == style { lockedPopover = nil } }),
+                         arrowEdge: .bottom) {
+                    NeedsLicencePopover(open: gate.open) { lockedPopover = nil }
+                }
             }
         }
         .padding(14)
@@ -112,6 +129,9 @@ struct PopupStylePicker: View {
 private struct PickerCard: View {
     let style: PopupStyle
     let selected: Bool
+    var locked = false
+    /// Locked, but the user's stored choice (free mode): dashed ring and "Your choice".
+    var stored = false
     let action: () -> Void
     @State private var hovering = false
 
@@ -120,11 +140,15 @@ private struct PickerCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 PickerArt(style: style)
                     .frame(height: 96)
+                    .opacity(locked ? 0.5 : 1)
                     .brightness(hovering ? 0.02 : 0)
                     .overlay {
                         let shape = RoundedRectangle(cornerRadius: DS.Radius.suggestion, style: .continuous)
                         if selected {
                             shape.inset(by: -1.25).strokeBorder(DS.brand, lineWidth: 2.5)
+                        } else if stored {
+                            shape.inset(by: -1.25).strokeBorder(DS.brand.opacity(0.55),
+                                                                style: StrokeStyle(lineWidth: 2, dash: [5, 4]))
                         } else {
                             shape.strokeBorder(DS.separator, lineWidth: 0.5)
                         }
@@ -137,6 +161,12 @@ private struct PickerCard: View {
                             .frame(width: 16, height: 16)
                     }
                     Text(name).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
+                    if locked { Spacer(minLength: 0); LockBadge(caption: false) }
+                }
+                if stored {
+                    Text("Your choice. It comes back with a licence.")
+                        .font(DS.Font.caption).foregroundStyle(DS.brand)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(detail)
                     .font(DS.Font.caption)

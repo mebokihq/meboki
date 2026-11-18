@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Settings › About (design_code.md §8.7). The source isn't published yet, so "Source code" is disabled;
-/// "Licenses" lists the third-party parts.
+/// "Acknowledgements" lists the third-party parts; the line under the version shows the licence state.
 struct AboutPane: View {
     @ObservedObject var model: SettingsModel
+    @ObservedObject var licence: LicenceManager
     @State private var showLicenses = false
 
     private var version: String {
@@ -16,13 +17,18 @@ struct AboutPane: View {
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             Text("Meboki").font(DS.Font.aboutTitle).foregroundStyle(DS.text).padding(.top, 8)
             Text("Version \(version) · Milestone A").foregroundStyle(DS.textSecondary)
+            Button { model.pane = .licence } label: {
+                Text(licenceLine).foregroundStyle(DS.textSecondary)
+            }
+            .buttonStyle(.plain)
+            .help("Open Settings › Licence")
             Text("Open source. Local models. No account.").foregroundStyle(DS.textSecondary)
             HStack(spacing: 8) {
                 Button("Source code") {}
                     .buttonStyle(.dsSecondary)
                     .disabled(true)
                     .help("The source isn't published yet.")
-                Button("Licenses") { showLicenses.toggle() }
+                Button("Acknowledgements") { showLicenses.toggle() }
                     .buttonStyle(.dsSecondary)
                     .popover(isPresented: $showLicenses, arrowEdge: .bottom) { licenses }
                 Button("Welcome Guide") { model.actions.showWelcome() }
@@ -35,6 +41,14 @@ struct AboutPane: View {
         .padding(.top, 40)
     }
 
+    private var licenceLine: String {
+        switch licence.entitlement {
+        case .licensed(let info): "Licensed to \(info.email)"
+        case .trial: licence.isLastTrialDay ? "Trial · last day" : "Trial · \(licence.trialDaysLeft) days left"
+        case .free: "Free mode"
+        }
+    }
+
     private var licenses: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Third-party parts").font(DS.Font.bodySemibold)
@@ -43,7 +57,7 @@ struct AboutPane: View {
             license("Llama 3.1 8B model file (optional)",
                     "Built with Llama. Llama 3.1 is licensed under the Llama 3.1 Community License, "
                         + "Copyright © Meta Platforms, Inc. All Rights Reserved.")
-            Text("Meboki's own license isn't chosen yet.").font(DS.Font.caption).foregroundStyle(DS.textSecondary)
+            Text("Meboki is open source under GPL-3.0.").font(DS.Font.caption).foregroundStyle(DS.textSecondary)
         }
         .padding(16)
         .frame(width: 320, alignment: .leading)

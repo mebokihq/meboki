@@ -281,6 +281,12 @@ final class LicenceManager: ObservableObject {
         refresh()
     }
 
+    /// Screenshot demos only: shows `entitlement` and `trial` as given, without touching any store.
+    func debugForce(_ entitlement: Entitlement, trial: TrialClock) {
+        self.trial = trial
+        self.entitlement = entitlement
+    }
+
     private func applyDebugTrial(_ t: TrialClock) {
         trialStore.write(t)
         trial = trialStore.read()

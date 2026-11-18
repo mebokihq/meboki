@@ -421,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// `meboki://activate?key=…`, from the purchase page, or launched by it. The URL is untrusted input: only the
-    /// `activate` host with one `key` parameter of a sane length is read. A3 routes the result to the Licence pane.
+    /// `activate` host with one `key` parameter of a sane length is read. The result shows in Settings › Licence.
     func handleActivationURL(_ url: URL) {
         guard url.scheme?.lowercased() == "meboki", url.host?.lowercased() == "activate",
               let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
@@ -430,16 +430,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Log.write("licence: ignored a meboki:// URL that isn't a valid activation link")
             return
         }
-        let result = licence.activate(key)
-        showSettings()
-        switch result {
+        let model = settingsWindow.model
+        switch licence.activate(key) {
         case .success(let info):
-            toast(.success, "Licensed to \(info.email)", symbol: "checkmark.seal.fill", near: nil, duration: 6)
+            model.licenceKeyDraft = ""
+            model.licenceError = nil
+            showLicence()
+            model.showToast(.success, "Licensed to \(info.email)")
         case .failure(let error):
             Log.write("licence: activation by URL failed (\(error))")
-            toast(.error, error.message, near: nil, duration: 8)
+            model.licenceKeyDraft = key
+            model.licenceError = error.message
+            showLicence()
         }
     }
+
+    /// Opens Settings on the Licence pane (the popover rows, the notices and `meboki://activate` call this).
+    func showLicence() { showSettings(pane: .licence) }
 
     private static let maxActivationKeyLength = 2_000
 

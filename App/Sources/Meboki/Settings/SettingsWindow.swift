@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Settings panes (design_code.md §8), in sidebar order.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, writing, models, apps, shortcuts, privacy, about
+    case general, writing, models, apps, shortcuts, privacy, licence, about
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: "Apps"
         case .shortcuts: "Shortcuts"
         case .privacy: "Privacy"
+        case .licence: "Licence"
         case .about: "About"
         }
     }
@@ -29,6 +30,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: "macwindow"
         case .shortcuts: "keyboard"
         case .privacy: "lock.shield"
+        case .licence: "key.fill"
         case .about: "info.circle"
         }
     }
@@ -43,6 +45,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .apps: rgb = 0xFF9F0A
         case .shortcuts: rgb = 0xFF375F
         case .privacy: rgb = 0x30B850
+        case .licence: rgb = 0x30B0C7
         case .about: rgb = 0x636366
         }
         return Color(nsColor: .hex(rgb))
@@ -63,8 +66,11 @@ enum SettingsPane: String, CaseIterable, Identifiable {
                      "Code editor", "IDE", "Password manager", "Remote desktop", "Code", "Password fields"]
         case .shortcuts: ["Global", "Check text", "Apply all fixes", "Apply this fix", "Skip", "Ignore",
                           "Previous / next fix", "Close", "Hotkey", "Keyboard"]
-        case .privacy: ["Text sent to the internet", "Cloud", "Model downloads", "Logs", "Short text snippets in logs"]
-        case .about: ["Version", "Source code", "Licenses", "Welcome Guide", "Onboarding", "Accessibility"]
+        case .privacy: ["Text sent to the internet", "Cloud", "Model downloads", "Logs", "Short text snippets in logs",
+                        "Licence check", "Revoked keys"]
+        case .licence: ["Licence", "License", "Trial", "Free mode", "Activate", "Buy a Licence", "Licence key", "Key",
+                        "Paste", "Remove Licence", "Lost your key", "Refund", "Unlock", "What a licence adds"]
+        case .about: ["Version", "Source code", "Acknowledgements", "Licensed to", "Welcome Guide", "Onboarding", "Accessibility"]
         }
     }
 
@@ -128,10 +134,16 @@ final class SettingsModel: ObservableObject {
     @Published var savedKeys: Set<CloudProvider> = []
     @Published var cloudTest: [CloudProvider: CloudTestState] = [:]
     var actions = SettingsActions()
+    /// The licence state the Licence pane, the lock marks and About show.
+    let licence: LicenceManager
+    /// The key field of Settings › Licence, and the last activation error (kept here so a `meboki://` link can fill them).
+    @Published var licenceKeyDraft = ""
+    @Published var licenceError: String?
 
     private var toastHide: DispatchWorkItem?
 
-    init(pane: SettingsPane, selectedModelID: String) {
+    init(pane: SettingsPane, selectedModelID: String, licence: LicenceManager? = nil) {
+        self.licence = licence ?? .shared
         self.pane = pane
         self.selectedModelID = selectedModelID
     }
@@ -176,6 +188,7 @@ struct SettingsRootView: View {
             }
         }
         .ignoresSafeArea()
+        .environment(\.licenceGate, LicenceGate(locked: !settings.entitlement.isFull, open: { model.pane = .licence }))
         .onChange(of: model.pane) { _, p in
             settings.lastSettingsPane = p.rawValue
             model.recording = false
@@ -184,7 +197,7 @@ struct SettingsRootView: View {
 
     @ViewBuilder private var content: some View {
         if model.pane == .about {
-            ScrollView { AboutPane(model: model) }
+            ScrollView { AboutPane(model: model, licence: model.licence) }
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 // The title stays put: the window's (taller) title bar covers it, so nothing clickable
@@ -211,7 +224,8 @@ struct SettingsRootView: View {
         case .apps: AppsPane(settings: settings)
         case .shortcuts: ShortcutsPane(model: model, settings: settings)
         case .privacy: PrivacyPane(model: model, settings: settings)
-        case .about: AboutPane(model: model)
+        case .licence: LicencePane(model: model, settings: settings, licence: model.licence)
+        case .about: AboutPane(model: model, licence: model.licence)
         }
     }
 }

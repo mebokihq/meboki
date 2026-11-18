@@ -14,13 +14,16 @@ MainActor.assumeIsolated {
     }
     // `.build/debug/Meboki --demo-popups`: the real card and toast windows with sample content, placed
     // around a fake field in the middle of the main screen. Never takes the keyboard. Prints window numbers.
-    // `.build/debug/Meboki --settings-demo [pane] [--dark] [--recording] [--bubble]`: only the Settings
+    // `.build/debug/Meboki --settings-demo [pane] [--dark] [--recording] [--bubble]
+    // [--licence-state trial|trialFresh|lastDay|free|licensed|revoked]`: only the Settings
     // window with sample state (its own defaults suite), shown without activating. Prints its window number.
     if let i = CommandLine.arguments.firstIndex(of: "--settings-demo") {
         let args = CommandLine.arguments
         let pane = args.indices.contains(i + 1) ? SettingsPane(rawValue: args[i + 1]) : nil
         SettingsDemo.show(pane: pane ?? .general, dark: args.contains("--dark"),
-                          recording: args.contains("--recording"), bubble: args.contains("--bubble"))
+                          recording: args.contains("--recording"), bubble: args.contains("--bubble"),
+                          licenceState: args.firstIndex(of: "--licence-state").flatMap {
+                              args.indices.contains($0 + 1) ? args[$0 + 1] : nil })
         app.run()
         return
     }
