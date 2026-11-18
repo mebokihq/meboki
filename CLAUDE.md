@@ -137,5 +137,5 @@ Run `swift build` and `swift test` after every change. For app changes, also run
 
 ## Workflow
 
-- Commit only when asked, and create a branch first (default branch for PRs: `main`).
+- Commit only when asked, directly to `master` (the only branch, never `main`). Don't create a feature branch unless the user explicitly asks.
 - Before reporting work as done: build, test, and reinstall the app when app code changed.
