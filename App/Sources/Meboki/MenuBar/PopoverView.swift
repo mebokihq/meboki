@@ -189,7 +189,7 @@ struct PopoverView: View {
         if let id = model.appBundleID {
             let paused = settings.isPaused(id)
             ToggleTile(symbol: "pause", title: "Pause in \(model.appName ?? "this app")",
-                       state: paused ? "Paused" : settings.appMode(id) == .manual ? "Manual" : "Checking",
+                       state: paused ? "Paused" : settings.effectiveAppMode(id) == .manual ? "Manual" : "Checking",
                        isOn: paused) {
                 settings.setPaused(!paused, bundleID: id, name: model.appName)
             }

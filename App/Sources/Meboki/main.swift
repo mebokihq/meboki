@@ -47,6 +47,12 @@ MainActor.assumeIsolated {
         FieldProbe.run(CommandLine.arguments)
         return
     }
+    // `.build/debug/Meboki --licence-status`: the entitlement this Mac has now (read-only), then exits.
+    // `.build/debug/Meboki --verify-licence <key>`: what the key says (email, seats, kid), then exits. Stores nothing.
+    if CommandLine.arguments.contains("--licence-status") || CommandLine.arguments.contains("--verify-licence") {
+        LicenceCLI.run(CommandLine.arguments)
+        return
+    }
     if CommandLine.arguments.contains("--demo-popups") {
         DemoPopups.show()
         app.run()

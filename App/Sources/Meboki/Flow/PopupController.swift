@@ -1,7 +1,7 @@
 import AppKit
 
 /// The correction popup of a review session: the glass card or the anchored bubble, picked from
-/// `AppSettings.popupStyle` each time it opens (design_code.md §5.4, §5.5). Both have the same keys and
+/// `AppSettings.effectivePopupStyle` each time it opens (design_code.md §5.4, §5.5). Both have the same keys and
 /// actions. The bubble needs a word to point at, so without one (the no-bounds fallback) the card is shown,
 /// below the field, whatever the style.
 @MainActor
@@ -34,7 +34,7 @@ final class PopupController {
     func show(_ state: CardState, field: CGRect?, word: CGRect?) {
         var state = state
         if !settings.explainFixes { state.reason = nil }
-        if settings.popupStyle == .bubble, let word {
+        if settings.effectivePopupStyle == .bubble, let word {
             if card.isVisible { card.hide() }
             bubble.show(state, word: word)
         } else {

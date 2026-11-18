@@ -30,6 +30,14 @@ public enum FreeReason: Sendable, Equatable {
     }
 }
 
+extension LicenceInfo {
+    /// A corporate key past its end date plus the grace period. Personal keys never expire.
+    public func isExpired(now: Date) -> Bool {
+        guard let exp = expires else { return false }
+        return now > exp.addingTimeInterval(Double(Entitlement.expiryGraceDays) * 86_400)
+    }
+}
+
 /// What the user gets right now. Pure: the app feeds it the stored licence, the revoked list and the trial.
 public enum Entitlement: Sendable, Equatable {
     case licensed(LicenceInfo)
@@ -54,7 +62,7 @@ public enum Entitlement: Sendable, Equatable {
         if case .success(let info)? = licence {
             if revoked?.contains(info.kid) == true {
                 reason = .revoked
-            } else if let exp = info.expires, now > exp.addingTimeInterval(Double(expiryGraceDays) * 86_400) {
+            } else if info.isExpired(now: now) {
                 reason = .expired
             } else {
                 return .licensed(info)

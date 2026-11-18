@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let server = ServerManager()
     private let store = ModelStore()
     private let settings = AppSettings.shared
+    /// Licence state: trial, key, revoked list (`Licence/`). The check flow reads it through `settings`' effective values.
+    private let licence = LicenceManager.shared
     private lazy var popup = PopupController(settings: settings)
     /// The Settings window (design_code.md §8).
     private lazy var settingsWindow: SettingsWindowController = {
@@ -199,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
+        startLicence()
         server.onChange = { [weak self] state in
             self?.refreshStatus()
             switch state {
@@ -340,6 +343,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(NSMenuItem(title: "Show Server Log", action: #selector(showLog), keyEquivalent: ""))
         #if DEBUG
         menu.addItem(NSMenuItem(title: "Component Gallery (Debug)", action: #selector(showGallery), keyEquivalent: ""))
+        menu.addItem(buildLicenceDebugMenu())
         #endif
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Meboki", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
@@ -392,6 +396,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         refreshStatus()
     }
+
+    // MARK: Licence
+
+    /// Starts the licence manager: the app follows its entitlement from here on.
+    private func startLicence() {
+        settings.entitlement = licence.entitlement
+        licence.transitions.receive(on: DispatchQueue.main)
+            .sink { [weak self] t in self?.licenceStateChanged(from: t.from, to: t.to) }
+            .store(in: &settingsObservers)
+        Log.write("licence: \(LicenceManager.describe(licence.entitlement))")
+        licence.start()
+    }
+
+    /// The entitlement changed (activation, removal, trial end, a new day, the revoked list). The running app
+    /// switches behaviour at once: the effective settings follow, the automatic check starts or stops, and a
+    /// review that no longer qualifies ends. The popup style applies to the next check.
+    private func licenceStateChanged(from old: Entitlement, to new: Entitlement) {
+        settings.entitlement = new
+        updateAutoCheck()
+        appModesChanged()
+        // A4 plugs in here: the trial-ended and revoked notices (`trialEndNoticeShown`, `revokedNoticeShownKid`)
+        // and the last-day toast (`lastDayNoticeShown`), decided from `old` and `new`.
+    }
+
+    /// `meboki://activate?key=…`, from the purchase page, or launched by it. The URL is untrusted input: only the
+    /// `activate` host with one `key` parameter of a sane length is read. A3 routes the result to the Licence pane.
+    func handleActivationURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "meboki", url.host?.lowercased() == "activate",
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+              let key = items.first(where: { $0.name == "key" })?.value, !key.isEmpty,
+              key.count <= Self.maxActivationKeyLength else {
+            Log.write("licence: ignored a meboki:// URL that isn't a valid activation link")
+            return
+        }
+        let result = licence.activate(key)
+        showSettings()
+        switch result {
+        case .success(let info):
+            toast(.success, "Licensed to \(info.email)", symbol: "checkmark.seal.fill", near: nil, duration: 6)
+        case .failure(let error):
+            Log.write("licence: activation by URL failed (\(error))")
+            toast(.error, error.message, near: nil, duration: 8)
+        }
+    }
+
+    private static let maxActivationKeyLength = 2_000
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme?.lowercased() == "meboki" { handleActivationURL(url) }
+    }
+
+    #if DEBUG
+    private let licenceStatusItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+
+    private func buildLicenceDebugMenu() -> NSMenuItem {
+        let sub = NSMenu(title: "Licence (debug)")
+        licenceStatusItem.isEnabled = false
+        sub.addItem(licenceStatusItem)
+        sub.addItem(.separator())
+        for (title, action) in [("Add a Trial Day", #selector(debugAddTrialDay)), ("End Trial Now", #selector(debugEndTrial)),
+                                ("Reset Trial and Notice Flags", #selector(debugResetTrial)),
+                                ("Remove Licence", #selector(debugRemoveLicence)),
+                                ("Fetch Revoked List Now", #selector(debugFetchRevoked))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            sub.addItem(item)
+        }
+        let item = NSMenuItem(title: "Licence (debug)", action: nil, keyEquivalent: "")
+        item.submenu = sub
+        refreshLicenceStatusItem()
+        return item
+    }
+
+    private func refreshLicenceStatusItem() {
+        licenceStatusItem.title = LicenceManager.describe(licence.entitlement) + " · \(licence.trialDaysUsed) day(s) used"
+    }
+
+    @objc private func debugAddTrialDay() { licence.debugAddTrialDay(); refreshLicenceStatusItem() }
+    @objc private func debugEndTrial() { licence.debugEndTrial(); refreshLicenceStatusItem() }
+    @objc private func debugResetTrial() { licence.debugResetTrial(); refreshLicenceStatusItem() }
+    @objc private func debugRemoveLicence() { licence.removeLicence(); refreshLicenceStatusItem() }
+    @objc private func debugFetchRevoked() { licence.fetchRevokedIfDue(force: true) }
+    #endif
 
     // MARK: Settings window (§8)
 
@@ -637,7 +724,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return "That shortcut is taken by another app"
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) { refreshStatus() }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshStatus()
+        #if DEBUG
+        refreshLicenceStatusItem()
+        #endif
+    }
 
     // MARK: Popover (§7)
 
@@ -661,7 +753,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let s = session {
             let id = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier
             // Off ends any review; Manual ends an automatic one (it only follows apps that allow it).
-            if settings.appMode(id) == .off || (s.auto && !settings.autoCheckAllowed(id)) { cancel() }
+            if settings.effectiveAppMode(id) == .off || (s.auto && !settings.autoCheckAllowed(id)) { cancel() }
         }
         refreshStatus()
     }
@@ -1072,7 +1164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopAutoCheck()  // the hotkey check replaces a pending automatic one
         // Off in this app (Settings › Apps, §5.8, or popover › Pause in {App}): nothing is read.
         if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid(),
-           settings.appMode(front.bundleIdentifier) == .off {
+           settings.effectiveAppMode(front.bundleIdentifier) == .off {
             let name = front.localizedName ?? "this app"
             if settings.isOffByDefault(front.bundleIdentifier),
                let category = AppRules.category(of: front.bundleIdentifier) {
@@ -1147,9 +1239,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let id = checkID
         spaceChangedDuringCheck = false
+        licence.recordCheck()  // a real check: counts a trial day
         setChecking(true, status: "Checking…")
         let modelName = activeModelName
-        let useIsland = settings.popupStyle == .island
+        let useIsland = settings.effectivePopupStyle == .island
         if useIsland { island.showChecking(model: modelName, field: snap.frame) }
 
         // Settings › Writing and Settings › Apps (stage 9). Only the English variant reaches the model: it picks
@@ -1163,7 +1256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // With an empty cache the pipeline sends exactly what `ProofreadEngine` would (whole paragraphs); its
         // cache makes a second check, and the re-checks of a live review, send only the sentences that changed.
         let pipe = checkPipeline(for: modelKey, corrector: corrector)
-        let liveEligible = settings.underlineAsYouType && cloudProvider == nil
+        let liveEligible = settings.effectiveUnderlineAsYouType && cloudProvider == nil
             && scope.location == 0 && scope.length == ns.length
         let started = Date()
         checkTask = Task { @MainActor in
@@ -1592,10 +1685,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// The gates of ⌃⌥G, checked again before every live re-check: the text goes to the model again.
     private func liveCheckAllowed(_ s: Session) -> Bool {
-        guard !usingCloud, settings.underlineAsYouType, !AX.isSecureField(s.snapshot.element) else { return false }
+        guard !usingCloud, settings.effectiveUnderlineAsYouType, !AX.isSecureField(s.snapshot.element) else { return false }
         let bundle = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier
         if s.auto { return settings.autoCheckAllowed(bundle) }
-        return settings.appMode(bundle) != .off
+        return settings.effectiveAppMode(bundle) != .off
     }
 
     /// A live re-check came back. Applied only when the field still holds the text it checked; the fixes
@@ -2014,7 +2107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The tracker runs while "Underline mistakes as I type" is on and checks use the local model. Cloud
     /// models stay hotkey-only: Use consented to sends on ⌃⌥G, not one per typing pause.
     private func updateAutoCheck() {
-        if settings.underlineAsYouType, !usingCloud {
+        if settings.effectiveUnderlineAsYouType, !usingCloud {
             focusTracker.start()
         } else {
             focusTracker.stop()
@@ -2044,7 +2137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// The gates of ⌃⌥G, checked before every automatic check, plus the automatic check's own: the field's app
     /// is in front, the app isn't a terminal or code editor, the user didn't dismiss the underlines here.
     private func autoCheckAllowed(_ t: AutoTarget) -> Bool {
-        guard settings.underlineAsYouType, !usingCloud, AX.isTrusted(prompt: false),
+        guard settings.effectiveUnderlineAsYouType, !usingCloud, AX.isTrusted(prompt: false),
               session == nil, checkTask == nil,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == t.pid,
               settings.autoCheckAllowed(NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier),
@@ -2108,6 +2201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                         visible: AX.visibleCharacterRange(t.element))
         autoTarget?.requested = text
         autoRequested = Date()
+        licence.recordCheck()  // a real check: counts a trial day
         let previous = autoChain
         autoChain = Task {
             await previous?.value
@@ -2180,7 +2274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 return
             }
             toasts.hide()
-            if settings.popupStyle == .island { island.hide() }
+            if settings.effectivePopupStyle == .island { island.hide() }
         }
         if let s = session, s.live { requestLiveCheck(s) }
         resumeAutoCheck()
@@ -2217,7 +2311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let app = NSRunningApplication(processIdentifier: t.pid), let id = app.bundleIdentifier {
             settings.noteChecked(bundleID: id, name: app.localizedName ?? id)
         }
-        session = Session(snapshot: snap, scopeLocation: 0, island: settings.popupStyle == .island,
+        session = Session(snapshot: snap, scopeLocation: 0, island: settings.effectivePopupStyle == .island,
                           fieldText: snap.text, list: FixList(text: snap.text, edits: edits),
                           modelName: activeModelName, cloudProvider: nil,
                           checkDuration: max(0, Date().timeIntervalSince(autoRequested) - 0.6),
@@ -2231,7 +2325,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                        actionTitle: String? = nil, action: (() -> Void)? = nil,
                        near frame: CGRect?, duration: TimeInterval = 4) {
         // Island style shows messages in the island (§5.8).
-        if settings.popupStyle == .island {
+        if settings.effectivePopupStyle == .island {
             toasts.hide(animated: false)
             island.showMessage(kind: kind, title: title, detail: detail, symbol: symbol, actionTitle: actionTitle,
                                action: action, field: frame, duration: duration)

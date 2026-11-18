@@ -93,6 +93,9 @@ final class AppSettings: ObservableObject {
         idleUnload = (defaults.object(forKey: Key.idleUnload) as? Int).flatMap(IdleUnload.init(rawValue:)) ?? .fifteen
         onboardingDone = defaults.bool(forKey: Key.onboardingDone)
         acceptedLicenses = Set(defaults.stringArray(forKey: Key.acceptedLicenses) ?? [])
+        trialEndNoticeShown = defaults.bool(forKey: Key.trialEndNoticeShown)
+        lastDayNoticeShown = defaults.bool(forKey: Key.lastDayNoticeShown)
+        revokedNoticeShownKid = defaults.string(forKey: Key.revokedNoticeShownKid)
     }
 
     enum Key {
@@ -119,6 +122,9 @@ final class AppSettings: ObservableObject {
         static let idleUnload = "idleUnloadMinutes"
         static let onboardingDone = "onboardingDone"
         static let acceptedLicenses = "acceptedModelLicenses"
+        static let trialEndNoticeShown = "trialEndNoticeShown"
+        static let lastDayNoticeShown = "lastDayNoticeShown"
+        static let revokedNoticeShownKid = "revokedNoticeShownKid"
     }
 
     /// Default `.card`.
@@ -227,6 +233,52 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(idleUnload.rawValue, forKey: Key.idleUnload) }
     }
 
+    // MARK: Licence (PLAN.md §6 "App-side licensing")
+
+    /// What the licence allows now, set by `AppDelegate` from `LicenceManager`. Defaults to everything on, so a
+    /// demo or test instance isn't gated. The stored settings above never change with it.
+    @Published var entitlement: Entitlement = .trial(daysLeft: TrialClock.length)
+
+    /// The trial-ended notice was shown (once, ever).
+    @Published var trialEndNoticeShown: Bool {
+        didSet { defaults.set(trialEndNoticeShown, forKey: Key.trialEndNoticeShown) }
+    }
+
+    /// The last-trial-day toast was shown (once, ever).
+    @Published var lastDayNoticeShown: Bool {
+        didSet { defaults.set(lastDayNoticeShown, forKey: Key.lastDayNoticeShown) }
+    }
+
+    /// The `kid` of the licence whose revoked or expired notice was shown (once per key).
+    @Published var revokedNoticeShownKid: String? {
+        didSet { defaults.set(revokedNoticeShownKid, forKey: Key.revokedNoticeShownKid) }
+    }
+
+    /// Debug reset of the one-shot notices.
+    func resetLicenceNotices() {
+        trialEndNoticeShown = false
+        lastDayNoticeShown = false
+        revokedNoticeShownKid = nil
+    }
+
+    // Effective values: the stored setting combined with the entitlement (`Entitlement` in Core). The check flow
+    // reads these; the Settings controls keep reading and writing the stored values.
+
+    /// Card in free mode, else the stored style.
+    var effectivePopupStyle: PopupStyle { entitlement.allows(.popupStyles) ? popupStyle : .card }
+
+    /// Full in free mode, else the stored level.
+    var effectiveCheckLevel: CheckLevel { entitlement.effective(checkLevel) }
+
+    /// Off in free mode, else the stored switch.
+    var effectiveCasualMode: Bool { entitlement.effectiveCasual(casualMode) }
+
+    /// Off in free mode (no automatic check, no live re-check), else the stored switch.
+    var effectiveUnderlineAsYouType: Bool { entitlement.effectiveAutomaticCheck(underlineAsYouType) }
+
+    /// The mode the check flow acts on: On and Casual act as Manual in free mode; Manual and Off stay.
+    func effectiveAppMode(_ bundleID: String?) -> AppMode { entitlement.effective(appMode(bundleID)) }
+
     func cloudModel(for provider: CloudProvider) -> CloudModel {
         CloudCatalog.model(id: cloudModelIDs[provider.rawValue], provider: provider)
     }
@@ -296,21 +348,23 @@ final class AppSettings: ObservableObject {
         return learned
     }
 
-    /// The automatic check may run in this app: On or Casual (not Manual, not Off or paused).
+    /// The automatic check may run in this app: the switch is on and the app is On or Casual (not Manual, not Off or
+    /// paused), by the effective values: never in free mode.
     func autoCheckAllowed(_ bundleID: String?) -> Bool {
         guard let bundleID else { return false }
-        return appMode(bundleID).allowsAutoCheck
+        return effectiveUnderlineAsYouType && effectiveAppMode(bundleID).allowsAutoCheck
     }
 
     /// Casual mode for an app: set to Casual in Settings › Apps, or a chat app with the switch on.
     func isCasual(_ bundleID: String?) -> Bool {
         guard let bundleID else { return false }
-        return appMode(bundleID) == .casual || (casualMode && AppRules.chatApps.contains(bundleID))
+        return effectiveAppMode(bundleID) == .casual
+            || (effectiveCasualMode && AppRules.chatApps.contains(bundleID))
     }
 
     /// What a check in `bundleID` uses (design_code.md §8.2, §8.4).
     func checkOptions(for bundleID: String?) -> CheckOptions {
-        CheckOptions(variant: englishVariant, level: checkLevel, casual: isCasual(bundleID), protectTokens: protectTokens,
+        CheckOptions(variant: englishVariant, level: effectiveCheckLevel, casual: isCasual(bundleID), protectTokens: protectTokens,
                      englishOnly: skipNonEnglish)
     }
 

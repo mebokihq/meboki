@@ -320,6 +320,8 @@ func b64u(_ d: Data) -> String {
         #expect(Entitlement.resolve(licence: .success(i), revoked: nil, trial: usedUp, now: now, calendar: cal) == .licensed(i))
         let old = try info(type: "corporate", exp: now.addingTimeInterval(-15 * day))
         #expect(Entitlement.resolve(licence: .success(old), revoked: nil, trial: usedUp, now: now, calendar: cal) == .free(.expired))
+        #expect(!i.isExpired(now: now) && old.isExpired(now: now))
+        #expect(try !info().isExpired(now: now))
         #expect(Entitlement.resolve(licence: .success(old), revoked: nil, trial: TrialClock(), now: now, calendar: cal) == .trial(daysLeft: 7))
         // Revoked wins over expired.
         #expect(Entitlement.resolve(licence: .success(old), revoked: list([old.kid]), trial: usedUp, now: now, calendar: cal) == .free(.revoked))
