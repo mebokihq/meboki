@@ -19,6 +19,17 @@ enum ActivationError: Error, Equatable {
     }
 }
 
+extension Calendar {
+    /// The calendar that makes the trial's day strings: Gregorian whatever the user's calendar system, in the
+    /// time zone the Mac has now (it follows a change of zone).
+    static var licenceDays: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .autoupdatingCurrent
+        c.locale = Locale(identifier: "en_US_POSIX")
+        return c
+    }
+}
+
 /// The app's licence state (PLAN.md §6 "App-side licensing"): the stored key, the revoked list and the trial
 /// clock, joined into one `Entitlement` that the check flow reads (through `AppSettings`' effective values).
 /// Everything is checked on this Mac; the only network call is the daily revoked-list download.
@@ -47,9 +58,16 @@ final class LicenceManager: ObservableObject {
     private var revoked: RevokedList?
     private var observers: [NSObjectProtocol] = []
     private var fetching = false
+    /// A forced state (demos): nothing re-resolves it.
+    private var forced = false
+    /// The last revoked-list request, successful or not (in memory): a failed one is retried after 10 minutes.
+    private var lastAttempt: Date?
+    private var retryItem: DispatchWorkItem?
 
     private static let lastFetchKey = "revokedLastFetch"
     private static let fetchInterval: TimeInterval = 24 * 3600
+    private static let retryInterval: TimeInterval = 600
+    private static let maxListBytes = 1_000_000
 
     // MARK: URLs for the UI
 
@@ -80,7 +98,7 @@ final class LicenceManager: ObservableObject {
     }
     var trialDaysUsed: Int { trial.days.count }
     /// Today already counts as a trial day (a check ran today).
-    var trialTodayCounted: Bool { trial.days.contains(trial.today(now: now(), calendar: calendar)) }
+    var trialTodayCounted: Bool { trial.countsToday(now: now(), calendar: calendar) }
     /// The ID of the stored key when it verifies (also when it is revoked or expired), for the per-key notice.
     var storedKid: String? {
         if case .success(let info)? = key { return info.kid }
@@ -91,21 +109,40 @@ final class LicenceManager: ObservableObject {
 
     /// `fetchEnabled: false` and a private `defaults`/stores keep demos and tests off the network and the real state.
     init(licenceStore: LicenceStore = .standard, trialStore: TrialStore = TrialStore(),
-         defaults: UserDefaults = .standard, calendar: Calendar = .current, now: @escaping () -> Date = { Date() },
-         fetchEnabled: Bool = true, observeSystem: Bool = true) {
+         defaults: UserDefaults = .standard, calendar: Calendar = .licenceDays, now: @escaping () -> Date = { Date() },
+         fetchEnabled: Bool = true, observeSystem: Bool = true, joinKeychain: Bool = true) {
         self.licenceStore = licenceStore
         self.trialStore = trialStore
         self.defaults = defaults
         self.calendar = calendar
         self.now = now
         self.fetchEnabled = fetchEnabled
-        let state = Self.load(licenceStore: licenceStore, trialStore: trialStore)
+        let state = Self.load(licenceStore: licenceStore, trial: trialStore.readLocal())
         key = state.key
         revoked = state.revoked
         trial = state.trial
         entitlement = Entitlement.resolve(licence: state.key, revoked: state.revoked, trial: state.trial,
                                           now: now(), calendar: calendar)
         if observeSystem { startObserving() }
+        if joinKeychain { joinKeptTrial() }
+    }
+
+    /// The Keychain copy of the trial as last read; `refresh` joins it in. The Keychain is read in the
+    /// background only (`TrialStore`): a locked keychain must never hold up the launch.
+    private var keptTrial: TrialClock?
+
+    /// Reads the Keychain copy in the background and joins it: days kept there but missing here (the
+    /// preferences were deleted) come back, and a Keychain that lacks days gets them.
+    private func joinKeptTrial() {
+        trialStore.readKept { [weak self] kept in
+            guard let self, !self.forced else { return }
+            self.keptTrial = kept
+            let joined = kept.map { self.trial.merged(with: $0) } ?? self.trial
+            if joined != kept { self.trialStore.write(joined) }
+            guard joined != self.trial else { return }
+            self.trial = joined
+            self.publish()
+        }
     }
 
     private struct State: Sendable {
@@ -114,15 +151,20 @@ final class LicenceManager: ObservableObject {
         var trial: TrialClock
     }
 
-    nonisolated private static func load(licenceStore: LicenceStore, trialStore: TrialStore) -> State {
+    nonisolated private static func load(licenceStore: LicenceStore, trial: TrialClock) -> State {
         State(key: licenceStore.loadKey().map { LicenceKey.verify($0) }, revoked: licenceStore.loadRevoked(),
-              trial: trialStore.read())
+              trial: trial)
     }
 
-    /// Read-only: the entitlement this Mac has now, without writing anything (`--licence-status`).
-    nonisolated static func peek(now: Date = Date(), calendar: Calendar = .current) -> Entitlement {
-        let s = load(licenceStore: .standard, trialStore: TrialStore(interactive: false))
-        return Entitlement.resolve(licence: s.key, revoked: s.revoked, trial: s.trial, now: now, calendar: calendar)
+    /// Read-only: the entitlement this Mac has now, without writing anything (`--licence-status`). The Keychain
+    /// is asked for at most `keychainWait` seconds (a locked login keychain can wait for the user forever);
+    /// `note` says when its copy of the trial was left out.
+    nonisolated static func peek(now: Date = Date(), calendar: Calendar = .licenceDays,
+                                 keychainWait: TimeInterval = 2) -> (entitlement: Entitlement, note: String?) {
+        let (trial, timedOut) = TrialStore(interactive: false).read(timeout: keychainWait)
+        let s = load(licenceStore: .standard, trial: trial)
+        let note = timedOut ? "the Keychain didn't answer in \(Int(keychainWait)) s; trial days are from the preferences only" : nil
+        return (Entitlement.resolve(licence: s.key, revoked: s.revoked, trial: s.trial, now: now, calendar: calendar), note)
     }
 
     /// Call once at launch, after the observers of `transitions` exist: remembers today, re-checks the key and
@@ -147,8 +189,10 @@ final class LicenceManager: ObservableObject {
 
     /// Reads everything again (stores, clock, day) and publishes a change.
     func refresh() {
-        var s = Self.load(licenceStore: licenceStore, trialStore: trialStore)
-        let before = s.trial
+        guard !forced else { return }
+        let local = trialStore.readLocal().merged(with: trial)
+        var s = Self.load(licenceStore: licenceStore, trial: keptTrial.map { local.merged(with: $0) } ?? local)
+        let before = trialStore.readLocal()
         s.trial.observe(now: now(), calendar: calendar)
         if s.trial != before { trialStore.write(s.trial) }
         key = s.key
@@ -158,6 +202,7 @@ final class LicenceManager: ObservableObject {
     }
 
     private func publish() {
+        guard !forced else { return }
         let new = Entitlement.resolve(licence: key, revoked: revoked, trial: trial, now: now(), calendar: calendar)
         guard new != entitlement else { return }
         let old = entitlement
@@ -189,23 +234,25 @@ final class LicenceManager: ObservableObject {
             key = .success(info)
             publish()
             Log.write("licence: activated (kid \(info.kid))")
-            fetchRevokedIfDue()
+            fetchRevokedIfDue(force: true)
             return .success(info)
         }
     }
 
-    /// Deletes the stored key (and the revoked list kept for it). Back to the trial, or free mode.
+    /// Deletes the stored key. The revoked list stays (known ids and the newest-list check survive a removal).
+    /// Back to the trial, or free mode.
     func removeLicence() {
         licenceStore.removeKey()
-        licenceStore.removeRevoked()
         key = nil
-        revoked = nil
+        retryItem?.cancel()
+        retryItem = nil
         Log.write("licence: removed")
         publish()
     }
 
     /// A real check ran (hotkey or automatic; not the onboarding sample): counts today as a trial day.
     func recordCheck() {
+        if forced { return }
         if case .licensed = entitlement { return }
         var t = trial
         t.recordCheck(now: now(), calendar: calendar)
@@ -217,12 +264,17 @@ final class LicenceManager: ObservableObject {
 
     // MARK: Revoked list (PLAN.md §6 "Revoked list")
 
-    /// Only with a licence installed: at launch, then at most once every 24 hours. Nothing is sent but a plain GET.
+    /// Only with a valid-looking key installed: at launch, then at most once every 24 hours after a successful
+    /// download. A failed one is tried again after 10 minutes (on the next wake, day change or activation, or
+    /// by one scheduled retry). Nothing is sent but a plain GET, and never two at once.
     func fetchRevokedIfDue(force: Bool = false) {
-        guard fetchEnabled, !fetching, key != nil else { return }
-        let last = defaults.object(forKey: Self.lastFetchKey) as? Date
-        if !force, let last, now().timeIntervalSince(last) < Self.fetchInterval, last <= now() { return }
-        defaults.set(now(), forKey: Self.lastFetchKey)
+        guard fetchEnabled, !fetching, case .success? = key else { return }
+        if !force {
+            if let last = defaults.object(forKey: Self.lastFetchKey) as? Date,
+               now().timeIntervalSince(last) < Self.fetchInterval, last <= now() { return }
+            if let tried = lastAttempt, now().timeIntervalSince(tried) < Self.retryInterval, tried <= now() { return }
+        }
+        lastAttempt = now()
         fetching = true
         let url = Self.revokedURL
         Task { @MainActor in
@@ -233,15 +285,31 @@ final class LicenceManager: ObservableObject {
             config.httpShouldSetCookies = false
             config.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
             config.timeoutIntervalForRequest = 15
+            config.timeoutIntervalForResource = 30
             let session = URLSession(configuration: config)
             defer { session.finishTasksAndInvalidate() }
             do {
-                let (data, response) = try await session.data(from: url)
-                guard (response as? HTTPURLResponse)?.statusCode == 200, data.count < 1_000_000,
-                      let list = RevokedList.parse(data) else {
+                let (bytes, response) = try await session.bytes(from: url)
+                guard (response as? HTTPURLResponse)?.statusCode == 200,
+                      response.expectedContentLength <= Int64(Self.maxListBytes) else {
                     Log.write("licence: revoked list not updated (bad response)")
+                    self.scheduleRetry()
                     return
                 }
+                var data = Data()
+                for try await byte in bytes {
+                    data.append(byte)
+                    if data.count > Self.maxListBytes { throw URLError(.dataLengthExceedsMaximum) }
+                }
+                guard let list = RevokedList.parse(data) else {
+                    Log.write("licence: revoked list not updated (bad list)")
+                    self.scheduleRetry()
+                    return
+                }
+                // A verified list came back: the 24 hours start now, whether or not it is newer.
+                self.defaults.set(self.now(), forKey: Self.lastFetchKey)
+                self.retryItem?.cancel()
+                self.retryItem = nil
                 guard let newest = RevokedList.newer(current: self.revoked, candidate: list), newest.raw == list.raw
                 else {
                     Log.write("licence: revoked list is current")
@@ -253,8 +321,22 @@ final class LicenceManager: ObservableObject {
                 self.publish()
             } catch {
                 Log.write("licence: revoked list not updated (\(error.localizedDescription))")
+                self.scheduleRetry()
             }
         }
+    }
+
+    /// One pending retry after a failed download.
+    private func scheduleRetry() {
+        guard retryItem == nil else { return }
+        let item = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.retryItem = nil
+                self?.fetchRevokedIfDue()
+            }
+        }
+        retryItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.retryInterval + 1, execute: item)
     }
 
     // MARK: Debug
@@ -283,6 +365,7 @@ final class LicenceManager: ObservableObject {
     /// Forgets the trial, and the one-shot notice flags.
     func debugResetTrial() {
         trialStore.erase()
+        keptTrial = nil
         trial = TrialClock()
         AppSettings.shared.resetLicenceNotices()
         refresh()
@@ -290,13 +373,15 @@ final class LicenceManager: ObservableObject {
 
     /// Screenshot demos only: shows `entitlement` and `trial` as given, without touching any store.
     func debugForce(_ entitlement: Entitlement, trial: TrialClock) {
+        forced = true
         self.trial = trial
         self.entitlement = entitlement
     }
 
     private func applyDebugTrial(_ t: TrialClock) {
         trialStore.write(t)
-        trial = trialStore.read()
+        keptTrial = t
+        trial = t
         publish()
     }
     #endif

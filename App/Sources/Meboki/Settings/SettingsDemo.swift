@@ -43,6 +43,7 @@ enum SettingsDemo {
             print("settings window \(w.windowNumber)")
             fflush(stdout)
         }
+        DemoSnapshot.scheduleIfRequested(c.debugWindow)
     }
 }
 #endif

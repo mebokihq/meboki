@@ -15,15 +15,19 @@ enum LicenceDemo {
     static func manager(state: String?, defaults: UserDefaults) -> LicenceManager {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("meboki-licence-demo")
         try? FileManager.default.removeItem(at: dir)
+        // Older demo builds kept a Keychain item here; demos use none now.
+        TrialStore.removeKeychainItem(service: "dev.local.meboki.trial.demo")
         let licence = LicenceManager(licenceStore: LicenceStore(directory: dir),
-                                     trialStore: TrialStore(defaults: defaults, service: "dev.local.meboki.trial.demo"),
-                                     defaults: defaults, fetchEnabled: false, observeSystem: false)
+                                     trialStore: TrialStore(defaults: defaults, service: "dev.local.meboki.trial.demo",
+                                                            keychain: false),
+                                     defaults: defaults, fetchEnabled: false, observeSystem: false,
+                                     joinKeychain: false)
         apply(state ?? "trial", to: licence)
         return licence
     }
 
     static func apply(_ state: String, to licence: LicenceManager) {
-        let cal = Calendar.current
+        let cal = Calendar.licenceDays
         func past(_ n: Int) -> [String] {
             (1...max(n, 1)).prefix(n).map { TrialClock.dayString(Date().addingTimeInterval(-Double($0) * 86_400), calendar: cal) }
         }

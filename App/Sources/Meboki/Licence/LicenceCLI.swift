@@ -6,7 +6,8 @@ import MebokiCore
 enum LicenceCLI {
     static func run(_ args: [String]) {
         if args.contains("--licence-status") {
-            let e = LicenceManager.peek()
+            let (e, note) = LicenceManager.peek()
+            if let note { print("note: \(note)") }
             print("entitlement: \(LicenceManager.describe(e))")
             if case .free(let reason) = e { print("reason: \(reason.message)") }
             if case .licensed(let i) = e {

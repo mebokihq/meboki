@@ -139,6 +139,8 @@ final class SettingsModel: ObservableObject {
     /// The key field of Settings › Licence, and the last activation error (kept here so a `meboki://` link can fill them).
     @Published var licenceKeyDraft = ""
     @Published var licenceError: String?
+    /// A neutral line under the key field (a link brought a second key while one is active).
+    @Published var licenceNote: String?
 
     private var toastHide: DispatchWorkItem?
 

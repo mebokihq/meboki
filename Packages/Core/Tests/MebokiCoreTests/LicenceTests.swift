@@ -237,11 +237,61 @@ func b64u(_ d: Data) -> String {
         #expect(t.today(now: date(3), calendar: cal) == "2026-12-10")
     }
 
-    @Test func rollbackDoesNotAddDays() {
+    // Replaces `rollbackDoesNotAddDays`, which encoded the old behaviour (an earlier real day was dropped).
+    @Test func earlierRealDayStillCounts() {
         var t = TrialClock()
         t.recordCheck(now: date(5), calendar: cal)
         t.recordCheck(now: date(2), calendar: cal)
-        #expect(t.days == ["2026-12-05"])
+        #expect(t.days == ["2026-12-02", "2026-12-05"])
+        #expect(t.lastSeen == "2026-12-05")
+    }
+
+    @Test func forwardJumpThenBackKeepsCounting() {
+        var t = TrialClock()
+        t.recordCheck(now: date(1), calendar: cal)
+        // The date is wrong for one launch (30 days ahead), then right again.
+        t.observe(now: date(1).addingTimeInterval(30 * 86_400), calendar: cal)
+        for d in 2...6 {
+            t.recordCheck(now: date(d), calendar: cal)
+            #expect(t.days.count == d)
+            #expect(t.days.last == "2026-12-0\(d)")
+        }
+        #expect(t.isActive(now: date(6), calendar: cal))
+        t.recordCheck(now: date(7), calendar: cal)
+        #expect(t.days.count == 7)
+        // Seven real active days: over (the later day seen keeps it over).
+        #expect(!t.isActive(now: date(7), calendar: cal))
+        #expect(t.daysLeft(now: date(8), calendar: cal) == 0)
+    }
+
+    @Test func forwardJumpCheckDoesNotFreeze() {
+        var t = TrialClock()
+        // A check while the clock is 30 days ahead stores that real (wrong) day once, then the real days follow.
+        let ahead = date(1).addingTimeInterval(30 * 86_400)
+        t.recordCheck(now: ahead, calendar: cal)
+        t.recordCheck(now: date(2), calendar: cal)
+        t.recordCheck(now: date(3), calendar: cal)
+        #expect(t.days.count == 3)
+    }
+
+    @Test func rollbackToCountedSeventhDayStaysOver() {
+        var t = TrialClock()
+        for d in 1...7 { t.recordCheck(now: date(d), calendar: cal) }
+        #expect(t.isActive(now: date(7), calendar: cal))
+        t.observe(now: date(8), calendar: cal)
+        #expect(!t.isActive(now: date(8), calendar: cal))
+        #expect(!t.isActive(now: date(7), calendar: cal))
+        t.recordCheck(now: date(7), calendar: cal)
+        #expect(!t.isActive(now: date(7), calendar: cal))
+    }
+
+    @Test func dayStringIsGregorianWhateverTheCalendar() {
+        var buddhist = Calendar(identifier: .buddhist)
+        buddhist.timeZone = cal.timeZone
+        #expect(TrialClock.dayString(date(5), calendar: buddhist) == "2026-12-05")
+        var japanese = Calendar(identifier: .japanese)
+        japanese.timeZone = cal.timeZone
+        #expect(TrialClock.dayString(date(5), calendar: japanese) == "2026-12-05")
     }
 
     @Test func mergeAndCodable() throws {

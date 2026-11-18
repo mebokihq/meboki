@@ -311,7 +311,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // With the icon hidden there is no other way in: a launch by hand opens Settings.
             showSettings()
         }
+        // A `meboki://` URL that launched the app waited for everything above.
+        launchFinished = true
+        let urls = pendingURLs
+        pendingURLs = []
+        for url in urls { handleActivationURL(url) }
     }
+
+    /// False until `applicationDidFinishLaunching` is through; a URL that opens the app before is kept till then.
+    private var launchFinished = false
+    private var pendingURLs: [URL] = []
 
     func applicationWillTerminate(_ notification: Notification) {
         server.stop()
@@ -426,6 +435,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         updateAutoCheck()
         appModesChanged()
         if new.isFull { noticeWindow?.close() }  // a key was activated while the notice was open
+        // A review in the other popup style (island or card) than the one now in effect ends, so the two UIs
+        // never mix; the next check uses the new style.
+        if let s = session, s.island != (settings.effectivePopupStyle == .island) {
+            Log.write("review: popup style changed with the licence; review ended")
+            cancel()
+        }
         showDueLicenceNotices()
     }
 
@@ -461,7 +476,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 buy: { NSWorkspace.shared.open(LicenceManager.buyURL) },
                 enterKey: { [weak self] in self?.showLicence() },
                 continueFree: {}))
-        w.onClose = { [weak self] in self?.noticeWindow = nil }
+        // Not inside `windowWillClose`: that would drop the last reference to the window while it closes.
+        w.onClose = { [weak self] in DispatchQueue.main.async { self?.noticeWindow = nil } }
         noticeWindow = w
         w.show()
     }
@@ -504,17 +520,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         let model = settingsWindow.model
+        // A different working licence is never replaced by a link: Settings › Licence opens with the new key in
+        // the field, and the user presses Activate. The same key again is a quiet success.
+        if let current = licence.licence, case .success(let new) = LicenceKey.verify(key), new.kid != current.kid,
+           !new.isExpired(now: Date()) {
+            Log.write("licence: activation link for another key; asked first")
+            model.licenceKeyDraft = key
+            model.licenceError = nil
+            model.licenceNote = LicenceText.replaceNote
+            showLicence()
+            return
+        }
+        // First launch: onboarding is on screen, so no Settings window over it; its Done card shows the licence.
+        let quiet = !settings.onboardingDone || onboarding?.isVisible == true
+        model.licenceNote = nil
         switch licence.activate(key) {
         case .success(let info):
             model.licenceKeyDraft = ""
             model.licenceError = nil
+            if quiet { Log.write("licence: activated by link during onboarding"); return }
             showLicence()
             model.showToast(.success, "Licensed to \(info.email)")
         case .failure(let error):
             Log.write("licence: activation by URL failed (\(error))")
             model.licenceKeyDraft = key
             model.licenceError = error.message
-            showLicence()
+            if !quiet { showLicence() }
         }
     }
 
@@ -524,7 +555,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private static let maxActivationKeyLength = 2_000
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls where url.scheme?.lowercased() == "meboki" { handleActivationURL(url) }
+        for url in urls where url.scheme?.lowercased() == "meboki" {
+            if launchFinished { handleActivationURL(url) } else { pendingURLs.append(url) }
+        }
     }
 
     #if DEBUG
@@ -2283,7 +2316,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                         visible: AX.visibleCharacterRange(t.element))
         autoTarget?.requested = text
         autoRequested = Date()
-        licence.recordCheck()  // a real check: counts a trial day
         let previous = autoChain
         autoChain = Task {
             await previous?.value
@@ -2376,6 +2408,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             Log.write("auto check failed: \(error)")
             return
         }
+        // Counts a trial day only when the pass really asked the model (not a focus, nor a cache hit).
+        if let r = update.result, r.requests > 0 { licence.recordCheck() }
         // The model changed since this check started: drop it. The text check below drops one for text that's gone.
         guard let result = update.result, let t = autoTarget, autoCheckAllowed(t), let pipe = autoPipeline,
               pipe === pipeline else { return }

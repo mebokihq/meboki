@@ -18,6 +18,9 @@ struct LicencePane: View {
             statusCard.padding(.bottom, 6)
             if let info = licence.licence {
                 licensedGroups(info)
+                if !model.licenceKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    replaceGroup
+                }
             } else {
                 getGroups
                 addsGroup
@@ -134,23 +137,39 @@ struct LicencePane: View {
             }
         }
         SettingsGroupHeader("Have a key?")
-        SettingsGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                keyField
-                HStack(spacing: 8) {
-                    resultLine
-                    Spacer(minLength: 0)
-                    Button("Paste") { paste() }.buttonStyle(.ds(.secondary, small: true))
-                    Button("Activate") { activate() }
-                        .buttonStyle(.ds(.primary, small: true))
-                        .disabled(model.licenceKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .padding(14)
-        }
+        SettingsGroup { keyEntry }
         HStack {
             Spacer(minLength: 0)
             Button("Lost your key?") { NSWorkspace.shared.open(LicenceManager.lostKeyURL) }.buttonStyle(.dsLink)
+        }
+        .padding(.top, 4)
+    }
+
+    /// Key field, result line, Paste and Activate.
+    private var keyEntry: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            keyField
+            HStack(spacing: 8) {
+                resultLine
+                Spacer(minLength: 0)
+                Button("Paste") { paste() }.buttonStyle(.ds(.secondary, small: true))
+                Button("Activate") { activate() }
+                    .buttonStyle(.ds(.primary, small: true))
+                    .disabled(model.licenceKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(14)
+    }
+
+    /// Shown while licensed only when a key waits in the field (a `meboki://` link brought another one, or a
+    /// failed replacement): Activate replaces the licence, Clear drops the draft.
+    @ViewBuilder private var replaceGroup: some View {
+        SettingsGroupHeader("Replace the licence")
+        SettingsGroup { keyEntry }
+        HStack {
+            Spacer(minLength: 0)
+            Button("Cancel") { model.licenceKeyDraft = ""; model.licenceError = nil; model.licenceNote = nil }
+                .buttonStyle(.dsLink)
         }
         .padding(.top, 4)
     }
@@ -181,6 +200,11 @@ struct LicencePane: View {
             .font(DS.Font.caption)
             .foregroundStyle(DS.catSpelling)
             .accessibilityElement(children: .combine)
+        } else if let note = model.licenceNote {
+            Text(note)
+                .font(DS.Font.caption)
+                .foregroundStyle(DS.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -199,8 +223,10 @@ struct LicencePane: View {
         case .success(let info):
             model.licenceKeyDraft = ""
             model.licenceError = nil
+            model.licenceNote = nil
             model.showToast(.success, "Licensed to \(info.email)")
         case .failure(let error):
+            model.licenceNote = nil
             model.licenceError = error.message
         }
     }

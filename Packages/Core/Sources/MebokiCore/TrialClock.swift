@@ -16,13 +16,16 @@ public struct TrialClock: Codable, Sendable, Equatable {
         self.lastSeen = lastSeen
     }
 
-    /// `yyyy-MM-dd` in `calendar`'s time zone.
+    /// `yyyy-MM-dd` in `calendar`'s time zone. The year, month and day are read through a Gregorian calendar with
+    /// the same time zone, so a user calendar (Buddhist, Japanese, ...) never changes the strings.
     public static func dayString(_ date: Date, calendar: Calendar) -> String {
-        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        var greg = Calendar(identifier: .gregorian)
+        greg.timeZone = calendar.timeZone
+        let c = greg.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
-    /// Today, never earlier than the latest day seen.
+    /// Today by the clock, never earlier than the latest day seen. Used for the expiry test only.
     public func today(now: Date, calendar: Calendar) -> String {
         max(Self.dayString(now, calendar: calendar), lastSeen ?? "")
     }
@@ -32,17 +35,19 @@ public struct TrialClock: Codable, Sendable, Equatable {
         lastSeen = today(now: now, calendar: calendar)
     }
 
-    /// A check ran: counts today while the trial is on, never more than `length` days.
+    /// A check ran: stores the real day (not the day seen) while fewer than `length` days are stored. A clock
+    /// that once jumped forward therefore doesn't freeze the count.
     public mutating func recordCheck(now: Date, calendar: Calendar) {
         observe(now: now, calendar: calendar)
-        let t = today(now: now, calendar: calendar)
+        let t = Self.dayString(now, calendar: calendar)
         if days.count < Self.length && !days.contains(t) {
             days.append(t)
             days.sort()
         }
     }
 
-    /// On while fewer than 7 days are stored, or the 7th stored day is today (it stays full until midnight).
+    /// On while fewer than 7 days are stored, or the day seen (never earlier than the real one) is the latest
+    /// stored day (the 7th day stays full until midnight; a later day seen ends it, also after a clock rollback).
     public func isActive(now: Date, calendar: Calendar) -> Bool {
         days.count < Self.length || days[Self.length - 1] == today(now: now, calendar: calendar)
     }
@@ -50,8 +55,13 @@ public struct TrialClock: Codable, Sendable, Equatable {
     /// 7 minus stored days, counting today as left when it is already stored. 0 when the trial is over.
     public func daysLeft(now: Date, calendar: Calendar) -> Int {
         guard isActive(now: now, calendar: calendar) else { return 0 }
-        let stored = days.contains(today(now: now, calendar: calendar)) ? 1 : 0
+        let stored = countsToday(now: now, calendar: calendar) ? 1 : 0
         return max(0, Self.length - days.count + stored)
+    }
+
+    /// Today (real day, or the day seen) is already one of the stored days.
+    public func countsToday(now: Date, calendar: Calendar) -> Bool {
+        days.contains(Self.dayString(now, calendar: calendar)) || days.contains(today(now: now, calendar: calendar))
     }
 
     /// The last trial day (shows "Last day").

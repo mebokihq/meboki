@@ -58,6 +58,7 @@ public enum LicenceText {
     public static let notAKey = "That doesn't look like a Meboki licence key. Copy the whole key from your purchase email, starting with MEBOKI-."
     public static let damaged = "This key is incomplete or was changed. Copy it again from your purchase email."
     public static let newerFormat = "This key needs a newer version of Meboki."
+    public static let replaceNote = "A licence is already active on this Mac. Press Activate to replace it."
     public static let revoked = "This licence was refunded or cancelled. Questions: \(supportEmail)"
     public static let expired = "This licence has expired. Renew it to keep the full app."
     public static let trialEnded = "Meboki is now in free mode. Your settings are saved and come back with a licence."
