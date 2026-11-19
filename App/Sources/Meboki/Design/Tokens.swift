@@ -116,7 +116,7 @@ extension DS {
     }
 
     /// The tone in use. Set on the main actor by `AppSettings.colorTone`; read wherever a color is drawn.
-    nonisolated(unsafe) static var tone: ColorTone = .current
+    nonisolated(unsafe) static var tone: ColorTone = .muted
 
     static var palette: Palette { palettes[tone] ?? palettes[.current]! }
 

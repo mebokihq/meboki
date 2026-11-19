@@ -87,7 +87,7 @@ final class AppSettings: ObservableObject {
         logSnippets = defaults.object(forKey: Key.logSnippets) as? Bool ?? true
         showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
         lastSettingsPane = defaults.string(forKey: Key.lastSettingsPane) ?? "general"
-        let tone = ColorTone(rawValue: defaults.string(forKey: Key.colorTone) ?? "") ?? .current
+        let tone = ColorTone(rawValue: defaults.string(forKey: Key.colorTone) ?? "") ?? .muted
         colorTone = tone
         DS.tone = tone
         modelSource = ModelSource(rawValue: defaults.string(forKey: Key.modelSource) ?? "") ?? .local
@@ -206,7 +206,7 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(lastSettingsPane, forKey: Key.lastSettingsPane) }
     }
 
-    /// Settings › Appearance: how vivid the brand and category colors are (`ColorTone`). Default `.current`.
+    /// Settings › Appearance: how vivid the brand and category colors are (`ColorTone`). Default `.muted`.
     /// Sets `DS.tone`, which every brand and category color reads when it's drawn.
     @Published var colorTone: ColorTone {
         didSet {
