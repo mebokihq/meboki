@@ -6,6 +6,8 @@
 	<string>Meboki</string>
 	<key>CFBundleExecutable</key>
 	<string>Meboki</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.meboki.app</string>
 	<key>CFBundleName</key>

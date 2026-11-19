@@ -98,9 +98,12 @@ Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   UpdateRules.swift             `UpdateFeed` (a valid feed address + public key), `UpdateTiming` (when an automatic install may run), `UpdateText` (all update strings)
   Entitlement.swift             licensed / trial / free from key + revoked list + trial; Feature; effective settings in free mode (level, app mode, casual, automatic check)
 Packages/Core/Tests/            Swift Testing suites
-App/Info.plist                  bundle ID com.meboki.app, LSUIElement
+App/Info.plist                  bundle ID com.meboki.app, LSUIElement, CFBundleIconFile AppIcon
+App/Art/                        icon and DMG background sources (SVG) and rendered files
 Scripts/build-llama-server.sh   static Metal llama-server (llama.cpp, no OpenSSL) → Vendor/bin/
 Scripts/make-app.sh             build + bundle (llama-server, Sparkle.framework) + sign inside out (Developer ID with hardened runtime + timestamp when the keychain has one, else Local Code Signing) → build/Meboki.app; --install → ~/Applications; `MEBOKI_FEED_URL` + `MEBOKI_UPDATE_KEY` turn the updater on
+Scripts/make-art.sh             renders App/Art/AppIcon.svg → AppIcon.icns and dmg-background.svg → .tiff (1x + 2x); outputs committed, needs rsvg-convert
+Scripts/make-dmg.sh             styled DMG (background, app left, Applications right, no toolbar) via dmgbuild in build/.dmg-venv; no Finder scripting
 Scripts/test-update.sh          local updater test: old build + newer build signed with a throwaway key + a feed on 127.0.0.1:8765 (build/update-test/)
 Scripts/release.sh              official release: Developer ID build with the updater (feed https://meboki.com/api/appcast.xml), notarized + stapled app and DMG, appcast.xml signed with the keychain update key (account meboki); --publish tags and creates the GitHub release (mebokihq/meboki)
 eval/                           Python benchmark (stdlib only) + results; eval/filter = Swift tool that scores the settings with Core

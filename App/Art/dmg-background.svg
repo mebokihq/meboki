@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 400" width="660" height="400">
+  <!-- DMG window background. Icons sit at (170, 220) and (490, 220), 128 pt; Finder draws their labels
+       below them, black on this light paper (Scripts/make-dmg.sh). -->
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FBFAF7"/>
+      <stop offset="1" stop-color="#F1EEE9"/>
+    </linearGradient>
+    <filter id="lift" x="-20%" y="-40%" width="140%" height="200%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".18"/>
+    </filter>
+  </defs>
+  <rect width="660" height="400" fill="url(#paper)"/>
+
+  <!-- Faint ruled paper -->
+  <g stroke="#E6E1DA" stroke-width="1">
+    <line x1="0" y1="152.5" x2="660" y2="152.5"/>
+    <line x1="0" y1="338.5" x2="660" y2="338.5"/>
+  </g>
+  <line x1="44.5" y1="0" x2="44.5" y2="400" stroke="#F3C9C9" stroke-width="1"/>
+
+  <!-- Headline with a deliberate typo -->
+  <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#1E1D21">
+    <text x="330" y="70" text-anchor="middle">Drag Meboki <tspan id="typo">too</tspan> Applications.</text>
+  </g>
+  <!-- Coral wavy underline under "too" -->
+  <path id="wave" fill="none" stroke="#FF5A5F" stroke-width="2.6" stroke-linecap="round"
+        d="M 308,79 q 3.5,-4 7,0 t 7,0 t 7,0 t 7,0 t 7,0 t 7,0"/>
+
+  <!-- Suggestion pill, like the app's island popup -->
+  <g transform="translate(273,92)" filter="url(#lift)">
+    <rect x="0" y="0" width="112" height="28" rx="14" fill="#1E1D21"/>
+    <g font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="14">
+      <text x="16" y="19" fill="#9A98A0" text-decoration="line-through">too</text>
+      <text x="48" y="19" fill="#9A98A0">→</text>
+      <text x="70" y="19" fill="#FFFFFF" font-weight="700">to</text>
+    </g>
+    <circle cx="97" cy="14" r="4" fill="#FF5A5F"/>
+  </g>
+
+  <!-- Hand-drawn arrow from the app to Applications -->
+  <path d="M 252,212 C 300,180 360,180 404,206" fill="none" stroke="#FF5A5F" stroke-width="4"
+        stroke-linecap="round" stroke-dasharray="1 9"/>
+  <path d="M 396,193 L 405,207 L 389,208" fill="none" stroke="#FF5A5F" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+
+  <!-- Footer -->
+  <text x="330" y="372" text-anchor="middle" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-size="13" fill="#8C8892">Local. Private. Only slightly judgmental.</text>
+</svg>

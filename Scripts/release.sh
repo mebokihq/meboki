@@ -81,12 +81,7 @@ rm -f "$OUT/Meboki-app.zip"
 xcrun stapler staple "$APP"
 
 step "DMG"
-STAGE="$OUT/dmg"
-mkdir -p "$STAGE"
-ditto "$APP" "$STAGE/Meboki.app"
-ln -s /Applications "$STAGE/Applications"
-hdiutil create -volname "Meboki" -srcfolder "$STAGE" -fs HFS+ -format UDZO -imagekey zlib-level=9 -ov "$DMG" >/dev/null
-rm -rf "$STAGE"
+"$ROOT/Scripts/make-dmg.sh" "$APP" "$DMG"
 codesign --force --sign "$IDENTITY" --timestamp "$DMG"
 notarize "$DMG"
 xcrun stapler staple "$DMG"

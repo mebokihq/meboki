@@ -56,6 +56,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Framewor
 cp "$BIN" "$APP/Contents/MacOS/Meboki"
 cp "$LLAMA" "$APP/Contents/MacOS/llama-server"
 cp "$ROOT/App/Info.plist" "$APP/Contents/Info.plist"
+cp "$ROOT/App/Art/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"   # from App/Art/AppIcon.svg (Scripts/make-art.sh)
 # The updater framework (symlinks kept). The binary looks for it next to itself in .build; in the bundle
 # it is in Contents/Frameworks.
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
