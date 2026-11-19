@@ -374,7 +374,7 @@ private struct MenuBarStrip: View {
 }
 
 /// The underline overlay's wavy line (`UnderlineOverlay.wave`): wavelength 4 pt, amplitude 1.5 pt.
-private struct WaveLine: Shape {
+struct WaveLine: Shape {
     func path(in r: CGRect) -> Path {
         var p = Path()
         let y = r.midY, amp: CGFloat = 1.5, half: CGFloat = 2

@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Settings panes (design_code.md §8), in sidebar order.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, writing, models, apps, shortcuts, privacy, licence, about
+    case general, appearance, writing, models, apps, shortcuts, privacy, licence, about
     #if DEBUG
     case debug
     #endif
@@ -15,6 +15,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: "General"
+        case .appearance: "Appearance"
         case .writing: "Writing"
         case .models: "Models"
         case .apps: "Apps"
@@ -31,6 +32,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .general: "gearshape"
+        case .appearance: "paintpalette"
         case .writing: "textformat"
         case .models: "cpu"
         case .apps: "macwindow"
@@ -49,6 +51,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         let rgb: UInt32
         switch self {
         case .general: rgb = 0x8E8E93
+        case .appearance: rgb = 0x5E5CE6
         case .writing: rgb = 0x0A84FF
         case .models: rgb = 0xAF52DE
         case .apps: rgb = 0xFF9F0A
@@ -70,6 +73,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
             ["Correction popup", "Glass card", "Anchored bubble", "Island HUD", "Return key", "Launch at login",
              "Show in menu bar", "Underline mistakes as I type", "Shortcut", "Check text", "Hotkey", "Updates",
              "Check for updates automatically", "Install updates automatically"]
+        case .appearance: ["Color tone", "Colors", "Vivid", "Eased", "Muted", "Dusty", "Bright", "Theme", "Preview"]
         case .writing:
             ["English variant", "US", "UK", "Check for", "Spelling", "Grammar", "Casual mode in chat apps",
              "Protect names, code and links", "Explain each fix", "Skip text that isn't English", "Language"]
@@ -195,6 +199,8 @@ struct SettingsRootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .clipped()
         }
+        // A new color tone redraws the whole window, so every brand and category color picks it up at once.
+        .id(settings.colorTone)
         .padding(8)
         .frame(width: 800, height: 580)
         .background(DS.window)
@@ -239,6 +245,7 @@ struct SettingsRootView: View {
     @ViewBuilder private var pane: some View {
         switch model.pane {
         case .general: GeneralPane(model: model, settings: settings)
+        case .appearance: AppearancePane(settings: settings)
         case .writing: WritingPane(settings: settings)
         case .models: ModelsPane(model: model, settings: settings, store: store)
         case .apps: AppsPane(settings: settings)

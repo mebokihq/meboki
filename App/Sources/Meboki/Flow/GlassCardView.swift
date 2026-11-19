@@ -4,13 +4,16 @@ import SwiftUI
 
 extension FixCategory {
     /// Category color (§2.1). Never the brand color.
-    var color: Color {
+    var color: Color { color(in: DS.palette) }
+
+    /// The category color in a given tone (Settings › Appearance swatches).
+    func color(in p: DS.Palette) -> Color {
         switch self {
-        case .spelling: DS.catSpelling
-        case .grammar: DS.catGrammar
-        case .clarity: DS.catClarity
-        case .punctuation: DS.catPunctuation
-        case .rewrite: DS.catRewrite
+        case .spelling: p.catSpelling
+        case .grammar: p.catGrammar
+        case .clarity: p.catClarity
+        case .punctuation: p.catPunctuation
+        case .rewrite: p.catRewrite
         }
     }
 }

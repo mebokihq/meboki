@@ -16,6 +16,11 @@ enum SettingsDemo {
         defaults.removePersistentDomain(forName: suite)
         let settings = AppSettings(defaults: defaults)
         settings.popupStyle = bubble ? .bubble : .card
+        // `--tone vivid|eased|muted|dusty` (raw values: current, eased, muted, dusty).
+        if let i = CommandLine.arguments.firstIndex(of: "--tone"), i + 1 < CommandLine.arguments.count {
+            let name = CommandLine.arguments[i + 1]
+            settings.colorTone = ColorTone(rawValue: name == "vivid" ? "current" : name) ?? .current
+        }
         settings.checkedApps = ["com.apple.Safari": "Safari", "com.google.Chrome": "Google Chrome",
                                 "com.apple.Notes": "Notes", "com.tinyspeck.slackmacgap": "Slack",
                                 "com.apple.MobileSMS": "Messages", "com.apple.Terminal": "Terminal",

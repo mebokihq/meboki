@@ -15,9 +15,10 @@ extension DS {
         })
     }
 
-    static let brand = dynamic("brand", light: .hex(0xFF3D6E), dark: .hex(0xFF5C85))
-    static let brand2 = dynamic("brand2", light: .hex(0xFF8A3D), dark: .hex(0xFF9A55))
-    static let brandSoft = dynamic("brandSoft", light: .hex(0xFF3D6E, 0.12), dark: .hex(0xFF5C85, 0.16))
+    /// Brand and category colors follow the color tone (Settings › Appearance, `ColorTone`).
+    static var brand: Color { palette.brand }
+    static var brand2: Color { palette.brand2 }
+    static var brandSoft: Color { palette.brandSoft }
 
     static let text = dynamic("text", light: .hex(0x1D1D1F), dark: .hex(0xF5F5F7))
     /// Raised from the HTML's .64 / .62 in stage 10 so secondary text is ≥ 4.5:1 on every surface (§11), including
@@ -44,11 +45,11 @@ extension DS {
     static let hover = dynamic("hover", light: .rgba(0, 0, 0, 0.05), dark: .rgba(255, 255, 255, 0.06))
     static let group = dynamic("group", light: .rgba(0, 0, 0, 0.035), dark: .rgba(255, 255, 255, 0.05))
 
-    static let catSpelling = dynamic("catSpelling", light: .hex(0xFF3B30), dark: .hex(0xFF453A))
-    static let catGrammar = dynamic("catGrammar", light: .hex(0x007AFF), dark: .hex(0x0A84FF))
-    static let catClarity = dynamic("catClarity", light: .hex(0xAF52DE), dark: .hex(0xBF5AF2))
-    static let catPunctuation = dynamic("catPunctuation", light: .hex(0xFF9500), dark: .hex(0xFF9F0A))
-    static let catRewrite = dynamic("catRewrite", light: .hex(0x30B0C7), dark: .hex(0x40CBE0))
+    static var catSpelling: Color { palette.catSpelling }
+    static var catGrammar: Color { palette.catGrammar }
+    static var catClarity: Color { palette.catClarity }
+    static var catPunctuation: Color { palette.catPunctuation }
+    static var catRewrite: Color { palette.catRewrite }
     static let ok = dynamic("ok", light: .hex(0x22B14C), dark: .hex(0x30D158))
 
     /// Island colors: dark in both themes.
@@ -78,16 +79,95 @@ extension DS {
     static let knobShadow = Color.black.opacity(0.3)
 }
 
+// MARK: - Color tone (Settings › Appearance)
+
+/// How vivid the brand and category colors are. Each tone keeps the hue of the original colors and lowers their
+/// chroma in OKLCH (Current 100 %, Eased 88 %, Muted 76 % and −1 lightness, Dusty 64 % and −3 lightness);
+/// the hex values below were computed once from the originals.
+enum ColorTone: String, CaseIterable, Identifiable, Sendable {
+    case current, eased, muted, dusty
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .current: "Vivid"
+        case .eased: "Eased"
+        case .muted: "Muted"
+        case .dusty: "Dusty"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .current: "Full macOS colors."
+        case .eased: "A touch calmer, same feel."
+        case .muted: "Clearly softer, still bright."
+        case .dusty: "Quiet, slightly greyed."
+        }
+    }
+}
+
+extension DS {
+    /// Brand and category colors of one tone.
+    struct Palette {
+        let brand, brand2, brandSoft: Color
+        let catSpelling, catGrammar, catClarity, catPunctuation, catRewrite: Color
+    }
+
+    /// The tone in use. Set on the main actor by `AppSettings.colorTone`; read wherever a color is drawn.
+    nonisolated(unsafe) static var tone: ColorTone = .current
+
+    static var palette: Palette { palettes[tone] ?? palettes[.current]! }
+
+    static func palette(_ tone: ColorTone) -> Palette { palettes[tone] ?? palettes[.current]! }
+
+    /// (light, dark) per token and tone.
+    private static let palettes: [ColorTone: Palette] = {
+        typealias Pair = (UInt32, UInt32)
+        func make(_ t: ColorTone, brand: Pair, brand2: Pair, spelling: Pair, grammar: Pair, clarity: Pair,
+                  punctuation: Pair, rewrite: Pair) -> Palette {
+            func c(_ name: String, _ p: Pair, _ a: (CGFloat, CGFloat) = (1, 1)) -> Color {
+                dynamic("\(name).\(t.rawValue)", light: .hex(p.0, a.0), dark: .hex(p.1, a.1))
+            }
+            return Palette(brand: c("brand", brand), brand2: c("brand2", brand2),
+                           brandSoft: c("brandSoft", brand, (0.12, 0.16)),
+                           catSpelling: c("catSpelling", spelling), catGrammar: c("catGrammar", grammar),
+                           catClarity: c("catClarity", clarity), catPunctuation: c("catPunctuation", punctuation),
+                           catRewrite: c("catRewrite", rewrite))
+        }
+        return [
+            .current: make(.current, brand: (0xFF3D6E, 0xFF5C85), brand2: (0xFF8A3D, 0xFF9A55),
+                           spelling: (0xFF3B30, 0xFF453A), grammar: (0x007AFF, 0x0A84FF), clarity: (0xAF52DE, 0xBF5AF2),
+                           punctuation: (0xFF9500, 0xFF9F0A), rewrite: (0x30B0C7, 0x40CBE0)),
+            .eased: make(.eased, brand: (0xF45073, 0xF56888), brand2: (0xF69050, 0xF79E64),
+                         spelling: (0xF44E40, 0xF45548), grammar: (0x267DF0, 0x2C86F1), clarity: (0xAA5BD4, 0xBA64E7),
+                         punctuation: (0xF79A38, 0xF7A33C), rewrite: (0x48AEC2, 0x58C9DB)),
+            .muted: make(.muted, brand: (0xE55A74, 0xE76E88), brand2: (0xEA925D, 0xEC9F6E),
+                         spelling: (0xE5594B, 0xE55F51), grammar: (0x357CDE, 0x3B85E0), clarity: (0xA260C6, 0xB169D8),
+                         punctuation: (0xEB9B4D, 0xECA451), rewrite: (0x56A9BA, 0x68C3D3)),
+            .dusty: make(.dusty, brand: (0xD36073, 0xD67185), brand2: (0xDA9066, 0xDD9D74),
+                         spelling: (0xD25F51, 0xD36357), grammar: (0x3E78C9, 0x4480CB), clarity: (0x9761B5, 0xA66BC6),
+                         punctuation: (0xDB995B, 0xDDA15F), rewrite: (0x5EA1AF, 0x71BBC8)),
+        ]
+    }()
+}
+
 // MARK: - Gradients
 
 extension DS {
     /// Brand gradient: 135° (top-left → bottom-right), `brand2` → `brand`. Text on it is always white.
-    static let brandGradient = LinearGradient(colors: [brand2, brand], startPoint: .topLeading, endPoint: .bottomTrailing)
+    static var brandGradient: LinearGradient {
+        LinearGradient(colors: [brand2, brand], startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
     /// Horizontal variant used by thin bars (meter, download bar, current progress dot).
-    static let brandGradientHorizontal = LinearGradient(colors: [brand2, brand], startPoint: .leading, endPoint: .trailing)
+    static var brandGradientHorizontal: LinearGradient {
+        LinearGradient(colors: [brand2, brand], startPoint: .leading, endPoint: .trailing)
+    }
     /// App icon gradient (145°).
-    static let appIconGradient = LinearGradient(colors: [brand2, brand],
-                                                startPoint: UnitPoint(x: 0.21, y: 0), endPoint: UnitPoint(x: 0.79, y: 1))
+    static var appIconGradient: LinearGradient {
+        LinearGradient(colors: [brand2, brand], startPoint: UnitPoint(x: 0.21, y: 0), endPoint: UnitPoint(x: 0.79, y: 1))
+    }
 
     /// Model glyph gradients (§3), keyed by catalog model ID prefix.
     static func modelGradient(for modelID: String) -> LinearGradient {
@@ -122,9 +202,9 @@ extension DS {
     ]
     static let islandShadow: [DSShadow] = [DSShadow(color: .black.opacity(0.45), radius: 16, x: 0, y: 14)]
     /// `0 4 12 -4 brand`
-    static let primaryShadow = DSShadow(color: brand.opacity(0.7), radius: 4, x: 0, y: 3)
+    static var primaryShadow: DSShadow { DSShadow(color: brand.opacity(0.7), radius: 4, x: 0, y: 3) }
     /// `0 8 20 -8 brand` (popover check button)
-    static let checkButtonShadow = DSShadow(color: brand.opacity(0.7), radius: 7, x: 0, y: 6)
+    static var checkButtonShadow: DSShadow { DSShadow(color: brand.opacity(0.7), radius: 7, x: 0, y: 6) }
 }
 
 extension View {

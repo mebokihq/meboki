@@ -87,6 +87,9 @@ final class AppSettings: ObservableObject {
         logSnippets = defaults.object(forKey: Key.logSnippets) as? Bool ?? true
         showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
         lastSettingsPane = defaults.string(forKey: Key.lastSettingsPane) ?? "general"
+        let tone = ColorTone(rawValue: defaults.string(forKey: Key.colorTone) ?? "") ?? .current
+        colorTone = tone
+        DS.tone = tone
         modelSource = ModelSource(rawValue: defaults.string(forKey: Key.modelSource) ?? "") ?? .local
         cloudProvider = CloudProvider(rawValue: defaults.string(forKey: Key.cloudProvider) ?? "") ?? .openRouter
         cloudModelIDs = defaults.dictionary(forKey: Key.cloudModelIDs) as? [String: String] ?? [:]
@@ -116,6 +119,7 @@ final class AppSettings: ObservableObject {
         static let logSnippets = "logSnippets"
         static let showInMenuBar = "showInMenuBar"
         static let lastSettingsPane = "lastSettingsPane"
+        static let colorTone = "colorTone"
         static let modelSource = "modelSource"
         static let cloudProvider = "cloudProvider"
         static let cloudModelIDs = "cloudModelIDs"
@@ -200,6 +204,15 @@ final class AppSettings: ObservableObject {
     /// The Settings pane shown last (`SettingsPane` raw value).
     @Published var lastSettingsPane: String {
         didSet { defaults.set(lastSettingsPane, forKey: Key.lastSettingsPane) }
+    }
+
+    /// Settings › Appearance: how vivid the brand and category colors are (`ColorTone`). Default `.current`.
+    /// Sets `DS.tone`, which every brand and category color reads when it's drawn.
+    @Published var colorTone: ColorTone {
+        didSet {
+            DS.tone = colorTone
+            defaults.set(colorTone.rawValue, forKey: Key.colorTone)
+        }
     }
 
     /// Local (default) or cloud. Cloud is opt-in: only the Models pane's "Use" on a saved key turns it on.
