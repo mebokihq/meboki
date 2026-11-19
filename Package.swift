@@ -8,6 +8,10 @@ let package = Package(
         .executable(name: "Meboki", targets: ["Meboki"]),
         .library(name: "MebokiCore", targets: ["MebokiCore"]),
     ],
+    dependencies: [
+        // Updates of official builds (MIT). App target only; the core package stays free of it.
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.10.1"),
+    ],
     targets: [
         // Pure Swift: prompt, LLM client, post-filters, diff. No AppKit, unit-tested.
         .target(name: "MebokiCore", path: "Packages/Core/Sources/MebokiCore"),
@@ -26,7 +30,7 @@ let package = Package(
         // Menu-bar app: accessibility, hotkey, panel, model download, llama-server process.
         .executableTarget(
             name: "Meboki",
-            dependencies: ["MebokiCore"],
+            dependencies: ["MebokiCore", .product(name: "Sparkle", package: "Sparkle")],
             path: "App/Sources/Meboki"
         ),
     ],

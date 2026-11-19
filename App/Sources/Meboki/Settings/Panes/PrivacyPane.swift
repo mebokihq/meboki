@@ -1,3 +1,4 @@
+import MebokiCore
 import SwiftUI
 
 /// Settings › Privacy (design_code.md §8.6): the hero card and what leaves the Mac (nothing but downloads, or
@@ -5,6 +6,7 @@ import SwiftUI
 struct PrivacyPane: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var updates = UpdateController.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -27,6 +29,13 @@ struct PrivacyPane: View {
                     Pill("meboki.com")
                 }
                 SettingsDivider()
+                if updates.isEnabled {
+                    SettingsRow(UpdateText.privacyTitle,
+                                subtitle: UpdateText.privacyDetail(automaticChecks: updates.automaticChecks)) {
+                        Pill(updates.automaticChecks ? "Once a day" : "Off")
+                    }
+                    SettingsDivider()
+                }
                 SettingsRow(leading: {
                     SettingsLabel(title: "Logs", subtitle: "~/Library/Logs/Meboki/", monospacedSubtitle: true)
                 }, control: {

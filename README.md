@@ -81,6 +81,18 @@ Layout:
 - `App/Sources/Meboki/Design` — design tokens and shared UI components.
 - `eval/` — model/prompt benchmark. Run it before changing the prompt, filters, or model files.
 
+## Updates
+
+Official builds update themselves through [Sparkle](https://sparkle-project.org): one check a day (Settings › General › Updates turns it off), nothing about you is sent, and every update is signed. A build you make yourself has no updater: `Scripts/make-app.sh` adds one only when `MEBOKI_FEED_URL` and `MEBOKI_UPDATE_KEY` are set.
+
+To try the updater on your Mac without a release:
+
+```sh
+Scripts/test-update.sh            # installs the current version with a local feed, serves a newer test build
+# in the app: right-click the menu-bar icon › Check for Updates…
+Scripts/make-app.sh --install     # afterwards: back to the plain build
+```
+
 ## Trial, free mode and licence
 
 Meboki is open source (GPL-3.0). The signed app has a 7-day full trial, counting only days on which you check text. After the trial it keeps working in **free mode**: the shortcut (⌃⌥G by default) checks any field, with every model and your own API key, and applying fixes and every privacy setting stay free. Underlines as you type, the bubble and island popups, Check level, Check for, Casual mode and per-app On and Casual need a licence. Your settings are kept in free mode and come back with a licence.

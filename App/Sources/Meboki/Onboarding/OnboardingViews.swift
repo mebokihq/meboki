@@ -882,6 +882,7 @@ private struct StyleChoice: View {
 private struct DonePage: View {
     @ObservedObject var model: OnboardingModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var updates = UpdateController.shared
 
     var body: some View {
         PageBody {
@@ -908,6 +909,13 @@ private struct DonePage: View {
                     SettingsDivider()
                     SettingsRow("Launch at login", subtitle: "Start Meboki when you log in") {
                         SettingsSwitch(isOn: launchBinding, label: "Launch at login")
+                    }
+                    // Official builds only. On from the start, so it is said here, before the first check.
+                    if updates.isEnabled {
+                        SettingsDivider()
+                        SettingsRow(UpdateText.automaticChecks, subtitle: "Once a day. Nothing about you is sent") {
+                            SettingsSwitch(isOn: $updates.automaticChecks, label: UpdateText.automaticChecks)
+                        }
                     }
                 }
             }

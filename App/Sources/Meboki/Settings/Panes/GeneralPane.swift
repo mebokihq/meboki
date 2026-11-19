@@ -1,9 +1,11 @@
+import MebokiCore
 import SwiftUI
 
 /// Settings › General (design_code.md §8.1): popup style picker, Return key, App group, the shortcut.
 struct GeneralPane: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject private var updates = UpdateController.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -48,6 +50,29 @@ struct GeneralPane: View {
             SettingsGroup {
                 SettingsRow("Check text", subtitle: "Proofreads the focused field, or the selection if there is one") {
                     HotkeyField(model: model, shortcut: settings.hotkey)
+                }
+            }
+
+            // Official builds only: a build from source has no updater.
+            if updates.isEnabled {
+                SettingsGroupHeader("Updates")
+                SettingsGroup {
+                    SettingsRow(UpdateText.automaticChecks, subtitle: UpdateText.automaticChecksDetail) {
+                        SettingsSwitch(isOn: $updates.automaticChecks, label: UpdateText.automaticChecks)
+                    }
+                    SettingsDivider()
+                    SettingsRow(UpdateText.automaticInstall, subtitle: UpdateText.automaticInstallDetail) {
+                        SettingsSwitch(isOn: $updates.automaticInstall, label: UpdateText.automaticInstall)
+                            .disabled(!updates.automaticChecks)
+                            .opacity(updates.automaticChecks ? 1 : 0.5)
+                    }
+                    SettingsDivider()
+                    SettingsRow(updates.available.map(UpdateText.available) ?? "Version \(UpdateController.currentVersion)",
+                                subtitle: UpdateText.lastChecked(updates.lastCheck)) {
+                        Button(updates.available == nil ? "Check Now" : "Install…") { model.actions.showUpdate() }
+                            .buttonStyle(.ds(updates.available == nil ? .secondary : .primary, small: true))
+                            .disabled(!updates.canCheck)
+                    }
                 }
             }
         }

@@ -6,7 +6,8 @@ import SwiftUI
 /// - idle: the template `text.badge.checkmark`,
 /// - checking: `menuPulse` plus a 6 pt brand dot top-right with a 1.5 pt ring in the menu-bar text color,
 /// - open (popover showing): the system highlight,
-/// - paused in the frontmost app: the dot turns `catPunctuation`, no pulse.
+/// - paused in the frontmost app: the dot turns `catPunctuation`, no pulse,
+/// - an update is waiting (and neither of the two above): the dot is `ok` green, no pulse.
 @MainActor
 final class StatusItem: NSObject {
     var onLeftClick: (() -> Void)?
@@ -22,6 +23,8 @@ final class StatusItem: NSObject {
     var isChecking = false { didSet { if isChecking != oldValue { update() } } }
     /// Checks are paused in the frontmost app.
     var isPaused = false { didSet { if isPaused != oldValue { update() } } }
+    /// A new version was found and the user hasn't looked at it yet.
+    var hasUpdate = false { didSet { if hasUpdate != oldValue { update() } } }
     /// The popover is showing.
     var isOpen = false { didSet { if isOpen != oldValue { updateHighlight() } } }
 
@@ -102,7 +105,7 @@ final class StatusItem: NSObject {
 
     private func update() {
         guard let button = item.button else { return }
-        let showDot = isChecking || isPaused
+        let showDot = isChecking || isPaused || hasUpdate
         if showDot {
             let d = dot ?? makeDot(in: button)
             let b = button.bounds
@@ -112,7 +115,7 @@ final class StatusItem: NSObject {
                              width: size, height: size)
             button.effectiveAppearance.performAsCurrentDrawingAppearance {
                 d.layer?.backgroundColor = NSColor.labelColor.cgColor
-                d.layer?.sublayers?.first?.backgroundColor = NSColor(isChecking ? DS.brand : DS.catPunctuation).cgColor
+                d.layer?.sublayers?.first?.backgroundColor = NSColor(isChecking ? DS.brand : isPaused ? DS.catPunctuation : DS.ok).cgColor
             }
         } else {
             dot?.removeFromSuperview()
@@ -134,6 +137,7 @@ final class StatusItem: NSObject {
         }
         var label = "Meboki"
         if isChecking { label += ", checking" } else if isPaused { label += ", paused in this app" }
+        if hasUpdate { label += ", update available" }
         button.setAccessibilityLabel(label)
     }
 

@@ -68,7 +68,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .general:
             ["Correction popup", "Glass card", "Anchored bubble", "Island HUD", "Return key", "Launch at login",
-             "Show in menu bar", "Underline mistakes as I type", "Shortcut", "Check text", "Hotkey"]
+             "Show in menu bar", "Underline mistakes as I type", "Shortcut", "Check text", "Hotkey", "Updates",
+             "Check for updates automatically", "Install updates automatically"]
         case .writing:
             ["English variant", "US", "UK", "Check for", "Spelling", "Grammar", "Casual mode in chat apps",
              "Protect names, code and links", "Explain each fix", "Skip text that isn't English", "Language"]
@@ -120,6 +121,8 @@ struct SettingsActions {
     var useCloud: () -> Void = {}
     /// Opens the onboarding window (About › Welcome Guide).
     var showWelcome: () -> Void = {}
+    /// Opens the update window (Check Now, or the version already found).
+    var showUpdate: () -> Void = {}
 }
 
 /// The result of Settings › Models › Test.

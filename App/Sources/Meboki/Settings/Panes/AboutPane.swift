@@ -1,3 +1,4 @@
+import MebokiCore
 import SwiftUI
 
 /// Settings › About (design_code.md §8.7). The source isn't published yet, so "Source code" is disabled;
@@ -5,11 +6,10 @@ import SwiftUI
 struct AboutPane: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var licence: LicenceManager
+    @ObservedObject private var updates = UpdateController.shared
     @State private var showLicenses = false
 
-    private var version: String {
-        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
-    }
+    private var version: String { UpdateController.currentVersion }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -35,6 +35,18 @@ struct AboutPane: View {
                     .buttonStyle(.dsSecondary)
             }
             .padding(.top, 14)
+            // Official builds only.
+            if updates.isEnabled {
+                HStack(spacing: 10) {
+                    Button(updates.available.map { "Install \($0)…" } ?? UpdateText.checkNow) { model.actions.showUpdate() }
+                        .buttonStyle(.dsSecondary)
+                        .disabled(!updates.canCheck)
+                    if let checked = UpdateText.lastChecked(updates.lastCheck) {
+                        Text(checked).font(DS.Font.caption).foregroundStyle(DS.textSecondary)
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
         .font(DS.Font.body)
         .frame(maxWidth: .infinity)
@@ -53,6 +65,7 @@ struct AboutPane: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Third-party parts").font(DS.Font.bodySemibold)
             license("llama.cpp (llama-server)", "MIT License · github.com/ggml-org/llama.cpp")
+            license("Sparkle (updates)", "MIT License · github.com/sparkle-project/Sparkle")
             license("Gemma 4 and Qwen3.5 model files", "Apache-2.0 · Google, Alibaba Cloud (Qwen)")
             license("Llama 3.1 8B model file (optional)",
                     "Built with Llama. Llama 3.1 is licensed under the Llama 3.1 Community License, "

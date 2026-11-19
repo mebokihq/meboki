@@ -42,6 +42,8 @@ final class PopoverModel: ObservableObject {
     @Published var hotkey = "⌃⌥G"
     /// "Trial · 4 days left" while the trial runs (nil otherwise). `PopoverPanel` keeps it current.
     @Published var trialText: String?
+    /// "0.2.0" when a new version is waiting (nil otherwise). `PopoverPanel` keeps it current.
+    @Published var updateVersion: String?
 }
 
 struct PopoverActions {
@@ -53,6 +55,8 @@ struct PopoverActions {
     var openModels: () -> Void = {}
     /// Settings › Licence (the trial line, "Unlock", a locked control).
     var openLicence: () -> Void = {}
+    /// The "Update available" row: the update window.
+    var showUpdate: () -> Void = {}
     var quit: () -> Void = {}
 }
 
@@ -78,6 +82,7 @@ struct PopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             header
+            updateRow
             checkButton
             freeModeRow
             tiles
@@ -163,6 +168,28 @@ struct PopoverView: View {
         }
         .buttonStyle(PressScaleStyle(hoverBrightness: true))
         .dsKeyLabel("Check focused field", kbd: model.hotkey)
+    }
+
+    // MARK: Update
+
+    /// A new version is waiting: one quiet row that opens the update window.
+    @ViewBuilder private var updateRow: some View {
+        if let version = model.updateVersion {
+            Button(action: actions.showUpdate) {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill").font(.system(size: 13)).foregroundStyle(DS.ok)
+                    Text(UpdateText.available(version)).font(.system(size: 12.5, weight: .semibold)).foregroundStyle(DS.text)
+                    Spacer(minLength: 0)
+                    Text("Install…").font(DS.Font.caption).foregroundStyle(DS.textSecondary)
+                }
+                .padding(EdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10))
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DS.ok.opacity(0.14)))
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(PressScaleStyle())
+            .accessibilityLabel(UpdateText.available(version))
+            .accessibilityHint("Opens the update window")
+        }
     }
 
     // MARK: Licence (PLAN.md §6 "Where the user meets the paywall")
@@ -454,6 +481,7 @@ final class PopoverPanel {
     private var mouseMonitor: Any?
     private var generation = 0
     private var licenceSub: AnyCancellable?
+    private var updateSub: AnyCancellable?
 
     init(settings: AppSettings, licence: LicenceManager? = nil) {
         let licence = licence ?? LicenceManager.shared
@@ -467,6 +495,8 @@ final class PopoverPanel {
                 guard let self, let licence else { return }
                 self.model.trialText = Self.trialText(licence)
             }
+        updateSub = UpdateController.shared.$available.receive(on: DispatchQueue.main)
+            .sink { [weak self] v in self?.model.updateVersion = v }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -491,6 +521,7 @@ final class PopoverPanel {
             openGeneral: { [weak self] in self?.hide(animated: false); a.openGeneral() },
             openModels: { [weak self] in self?.hide(animated: false); a.openModels() },
             openLicence: { [weak self] in self?.hide(animated: false); a.openLicence() },
+            showUpdate: { [weak self] in self?.hide(animated: false); a.showUpdate() },
             quit: { a.quit() })
     }
 

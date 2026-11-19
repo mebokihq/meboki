@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let settings = AppSettings.shared
     /// Licence state: trial, key, revoked list (`Licence/`). The check flow reads it through `settings`' effective values.
     private let licence = LicenceManager.shared
+    /// Updates (official builds only; `isEnabled` is false in a build from source).
+    private let updates = UpdateController.shared
     private lazy var popup = PopupController(settings: settings)
     /// The Settings window (design_code.md §8).
     private lazy var settingsWindow: SettingsWindowController = {
@@ -41,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             removeKey: { [weak self] p in self?.removeKey(p) },
             testCloud: { [weak self] p in self?.testCloud(p) },
             useCloud: { [weak self] in self?.useCloud() },
-            showWelcome: { [weak self] in self?.showOnboarding() })
+            showWelcome: { [weak self] in self?.showOnboarding() },
+            showUpdate: { [weak self] in self?.updates.showUpdate() })
         let c = SettingsWindowController(model: model, settings: settings, store: store)
         // Closing Settings gives the keyboard back to the app the user was in.
         c.onClose = { [weak self] in
@@ -305,9 +308,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in self?.updateAutoCheck() }
             .store(in: &settingsObservers)
         updateAutoCheck()
+        startUpdates()
+        // Reopened by the updater: as quiet as a launch at login.
+        let afterUpdate = UpdateController.consumeRelaunch()
         if firstRun {
             showOnboarding()
-        } else if !settings.showInMenuBar, !launchedAtLogin {
+        } else if !settings.showInMenuBar, !launchedAtLogin, !afterUpdate {
             // With the icon hidden there is no other way in: a launch by hand opens Settings.
             showSettings()
         }
@@ -347,6 +353,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsFromMenu), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Welcome Guide…", action: #selector(showOnboardingFromMenu), keyEquivalent: ""))
+        if updates.isEnabled {
+            menu.addItem(NSMenuItem(title: UpdateText.checkNow, action: #selector(checkForUpdatesFromMenu), keyEquivalent: ""))
+        }
         menu.addItem(.separator())
         menu.addItem(unloadItem)
         menu.addItem(NSMenuItem(title: "Show Models Folder", action: #selector(showModels), keyEquivalent: ""))
@@ -393,8 +402,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             openGeneral: { [weak self] in self?.showSettings(pane: .general) },
             openModels: { [weak self] in self?.showSettings(pane: .models) },
             openLicence: { [weak self] in self?.showLicence() },
+            showUpdate: { [weak self] in self?.showUpdate() },
             quit: { NSApp.terminate(nil) }))
         refreshStatus()
+    }
+
+    // MARK: Updates (PLAN.md §6 "Updates")
+
+    /// Starts the updater of an official build. A version found by the daily check shows as a dot on the
+    /// menu-bar icon and a row in the popover; nothing opens by itself while another app is in use.
+    private func startUpdates() {
+        guard updates.isEnabled else { return }
+        updates.isBusy = { [weak self] in self?.inUse ?? true }
+        updates.$needsAttention.receive(on: DispatchQueue.main)
+            .sink { [weak self] on in self?.statusItem.hasUpdate = on }
+            .store(in: &settingsObservers)
+        updates.start()
+    }
+
+    /// Something of Meboki's is in use: no automatic install (it quits and reopens the app).
+    private var inUse: Bool {
+        isChecking || checkTask != nil || session != nil || popup.isVisible || island.isVisible || toasts.isVisible
+            || popover.isVisible || noticeWindow?.isVisible == true || onboarding?.isVisible == true
+            || settingsWindow.isVisible || !settings.onboardingDone
+            || store.downloads.values.contains { state in
+                switch state {
+                case .downloading, .verifying: true
+                case .paused, .failed: false
+                }
+            }
+    }
+
+    /// Sparkle's update window, in front. A review ends first, as for Settings.
+    private func showUpdate() {
+        popover.hide(animated: false)
+        if session != nil || checkTask != nil { cancel() }
+        toasts.hide(animated: false)
+        island.hide(animated: false)
+        updates.showUpdate()
+    }
+
+    @objc private func checkForUpdatesFromMenu() {
+        // After the menu has closed.
+        DispatchQueue.main.async { self.showUpdate() }
     }
 
     /// The check item's key equivalent and the popover keycap follow the shortcut set in Settings.
