@@ -16,9 +16,16 @@ public struct RevokedList: Sendable, Equatable {
 
     public func contains(_ kid: String) -> Bool { kids.contains(kid) }
 
+    /// Verifies `body` with the production key and, when `sandboxAllowed`, the test-payment key (the list the site
+    /// serves while it takes test payments).
+    public static func parse(_ body: Data, sandboxAllowed: Bool = LicenceKey.acceptsSandboxKeys) -> RevokedList? {
+        if let list = parse(body, publicKey: LicenceKey.productionPublicKey) { return list }
+        return sandboxAllowed ? parse(body, publicKey: LicenceKey.sandboxPublicKey) : nil
+    }
+
     /// Verifies `body` with `publicKey` (raw 32 bytes). Nil when the body, the signature or the payload is bad,
     /// or the version is above 1.
-    public static func parse(_ body: Data, publicKey: Data = LicenceKey.productionPublicKey) -> RevokedList? {
+    public static func parse(_ body: Data, publicKey: Data) -> RevokedList? {
         guard let env = try? JSONDecoder().decode(Envelope.self, from: body),
               let payload = Base64URL.decode(env.payload), let sig = Base64URL.decode(env.sig),
               Ed25519.verify(signature: sig, message: payload, publicKey: publicKey),

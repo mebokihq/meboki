@@ -108,6 +108,34 @@ func b64u(_ d: Data) -> String {
 
     @Test func productionKeyIs32Bytes() {
         #expect(LicenceKey.productionPublicKey.count == 32)
+        #expect(LicenceKey.sandboxPublicKey.count == 32)
+        #expect(LicenceKey.sandboxPublicKey != LicenceKey.productionPublicKey)
+    }
+
+    /// Signed with the real test-payment key (the one the site uses for test cards).
+    static let sandboxKey = "MEBOKI-eyJ2IjoxLCJraWQiOiJTQU5EQk9YRklYVFVSRTAxIiwiZW1haWwiOiJ0ZXN0QGV4YW1wbGUuY29tIiwidHlwZSI6InBlcnNvbmFsIiwic2VhdHMiOjEsImlhdCI6IjIwMjYtMTEtMTlUMTA6MDA6MDAuMDAwWiJ9.1Jz9zVB8S7EmAycFd0gA9V9D-HSV0UJaho_uKqOay5i3uIb_LtyqxRGpePLpYHWPqD0tKd0BGCJ0wNzRLoqEDw"
+    static let sandboxList = Data("{\"payload\":\"eyJ2IjoxLCJpc3N1ZWQiOiIyMDI2LTExLTE5VDEwOjAwOjAwLjAwMFoiLCJraWRzIjpbIlNBTkRCT1hGSVhUVVJFMDEiXX0\",\"sig\":\"SXqTTYL3db6JLy53dtmChA6oX3HqtbOdzhFU_MIP7MJ-wkw9779cR_obVEgH_jtGfKNE-QDhuG5nYvKwhBdZCQ\"}".utf8)
+
+    @Test func sandboxKeyOnlyWhereAllowed() throws {
+        // Release builds: a test-card key is refused like any foreign key.
+        #expect(LicenceKey.verify(Self.sandboxKey, sandboxAllowed: false) == .failure(.damaged))
+        #expect(RevokedList.parse(Self.sandboxList, sandboxAllowed: false) == nil)
+        // Development builds: accepted and marked.
+        let info = try LicenceKey.verify(Self.sandboxKey, sandboxAllowed: true).get()
+        #expect(info.sandbox && info.kid == "SANDBOXFIXTURE01" && info.email == "test@example.com")
+        let list = try #require(RevokedList.parse(Self.sandboxList, sandboxAllowed: true))
+        #expect(list.contains("SANDBOXFIXTURE01"))
+        // Damage still reads as damage with both keys tried.
+        #expect(LicenceKey.verify(String(Self.sandboxKey.dropLast(4)), sandboxAllowed: true) == .failure(.damaged))
+        #expect(LicenceKey.verify("hello", sandboxAllowed: true) == .failure(.notAKey))
+    }
+
+    @Test func sandboxOnlyInDebug() {
+        #if DEBUG
+        #expect(LicenceKey.acceptsSandboxKeys)
+        #else
+        #expect(!LicenceKey.acceptsSandboxKeys)
+        #endif
     }
 
     /// Produced by a throwaway Node script with the Worker's steps (WebCrypto Ed25519, JSON.stringify field order

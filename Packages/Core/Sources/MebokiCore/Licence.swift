@@ -22,8 +22,11 @@ public struct LicenceInfo: Sendable, Equatable {
     public let expires: Date?
     /// The cleaned key text, as stored in the licence file.
     public let key: String
+    /// Signed by the test-payment signer (`LicenceKey.sandboxPublicKey`). Only DEBUG builds accept such keys.
+    public let sandbox: Bool
 
-    public init(kid: String, email: String, type: LicenceType, seats: Int, issued: Date, expires: Date?, key: String) {
+    public init(kid: String, email: String, type: LicenceType, seats: Int, issued: Date, expires: Date?, key: String,
+                sandbox: Bool = false) {
         self.kid = kid
         self.email = email
         self.type = type
@@ -31,6 +34,7 @@ public struct LicenceInfo: Sendable, Equatable {
         self.issued = issued
         self.expires = expires
         self.key = key
+        self.sandbox = sandbox
     }
 }
 
@@ -69,6 +73,16 @@ public enum LicenceText {
 public enum LicenceKey {
     /// Raw 32-byte Ed25519 public key of the licence signer.
     public static let productionPublicKey = Data(base64Encoded: "ePn8wpeQIBVRqJ1pXk0JgibAPbZ9cTGEeGFkijcetig=")!
+    /// Raw 32-byte Ed25519 public key of the test-payment signer. Keys bought with test cards are signed with it,
+    /// so they never unlock a release build.
+    public static let sandboxPublicKey = Data(base64Encoded: "Zv3qqHV8m4sDwJ7EGRWt9DdTxZngNXd/lRes9aiH0Vo=")!
+
+    /// Whether this build accepts keys and revoked lists from the test-payment signer: DEBUG builds only.
+    #if DEBUG
+    public static let acceptsSandboxKeys = true
+    #else
+    public static let acceptsSandboxKeys = false
+    #endif
 
     static let prefix = "MEBOKI-"
     /// An Ed25519 signature is 64 bytes, 86 base64url characters.
@@ -102,9 +116,17 @@ public enum LicenceKey {
         return out
     }
 
+    /// Checks `text` against the production key and, when `sandboxAllowed`, the test-payment key.
+    public static func verify(_ text: String, sandboxAllowed: Bool = acceptsSandboxKeys) -> Result<LicenceInfo, LicenceError> {
+        let result = verify(text, publicKey: productionPublicKey)
+        guard sandboxAllowed, result == .failure(.damaged) else { return result }
+        let sandbox = verify(text, publicKey: sandboxPublicKey, sandbox: true)
+        return sandbox == .failure(.damaged) ? result : sandbox
+    }
+
     /// Cleans `text`, checks the signature with `publicKey` (raw 32 bytes) and reads the payload.
     /// Revoked and expired are not decided here (`RevokedList`, `Entitlement.resolve`).
-    public static func verify(_ text: String, publicKey: Data = productionPublicKey) -> Result<LicenceInfo, LicenceError> {
+    public static func verify(_ text: String, publicKey: Data, sandbox: Bool = false) -> Result<LicenceInfo, LicenceError> {
         let key = clean(text)
         guard key.hasPrefix(prefix) else { return .failure(.notAKey) }
         let body = key.dropFirst(prefix.count)
@@ -122,7 +144,8 @@ public enum LicenceKey {
             guard let d = ISODate.parse(exp) else { return .failure(.damaged) }
             expires = d
         }
-        return .success(LicenceInfo(kid: p.kid, email: p.email, type: type, seats: p.seats, issued: issued, expires: expires, key: key))
+        return .success(LicenceInfo(kid: p.kid, email: p.email, type: type, seats: p.seats, issued: issued, expires: expires, key: key,
+                                      sandbox: sandbox))
     }
 
     private struct Probe: Decodable { let v: Int }

@@ -118,6 +118,7 @@ struct LicencePane: View {
         let date = Self.format(info.issued)
         var line = "\(info.seats) \(info.seats == 1 ? "Mac" : "Macs") · since \(date)"
         if let exp = info.expires { line += " · valid until \(Self.format(exp))" }
+        if info.sandbox { line += " · test purchase, works only in development builds" }
         return card(symbol: "checkmark.seal.fill", badge: [Color(nsColor: .hex(0x5EE08A)), DS.ok], tint: DS.ok,
                     title: "Licensed to \(info.email)", line: line) { EmptyView() }
     }

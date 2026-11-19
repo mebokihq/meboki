@@ -16,6 +16,7 @@ Status: Milestone A (hotkey proofreading), plus Milestone B: with the local mode
 ```sh
 Scripts/build-llama-server.sh      # once: static Metal llama-server → Vendor/bin/ (~2 min)
 Scripts/make-app.sh --install      # build, sign, copy to ~/Applications, open
+Scripts/make-app.sh --debug --install   # same, DEBUG build (debug menus; accepts keys from test payments)
 ```
 
 On first launch the **Welcome** window walks you through setup (open it again any time: right-click the menu-bar icon › Welcome Guide…, or Settings › About):
