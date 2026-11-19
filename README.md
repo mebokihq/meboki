@@ -11,7 +11,7 @@
 
 <p align="center">
   <a href="https://meboki.com">Website</a> ·
-  <a href="https://meboki.com">Download</a> ·
+  <a href="https://meboki.com/api/download">Download</a> ·
   <a href="#build-from-source">Build from source</a> ·
   <a href="LICENSE">GPL-3.0</a>
 </p>
@@ -33,7 +33,7 @@
 
 **Requirements:** Apple Silicon Mac, macOS 14 or later, about 5 GB of free disk for the model.
 
-1. Download the DMG from [meboki.com](https://meboki.com) and drag Meboki to Applications.
+1. [Download the DMG](https://meboki.com/api/download) and drag Meboki to Applications.
 2. Open it. The Welcome window walks you through setup:
    - turn on Meboki in **System Settings › Privacy & Security › Accessibility**;
    - download the recommended model (Gemma 4 E4B on 16 GB+ Macs, E2B on 8 GB);
