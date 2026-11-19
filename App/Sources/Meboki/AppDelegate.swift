@@ -2546,7 +2546,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             toast(.info, "This field doesn't share its text with macOS.", detail: "Meboki can't check it here",
                   near: nil)
         case .appHidesText:
-            // Sublime Text, Zed, canvas apps: they draw their own text, so there's nothing to read (compatibility.md).
+            // Sublime Text, Zed, canvas apps: they draw their own text, so there's nothing to read.
             toast(.info, "\(appName ?? "This app") doesn't share its text with macOS.",
                   detail: "Meboki can't check it here", near: nil, duration: 6)
         default:

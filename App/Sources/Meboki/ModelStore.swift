@@ -14,7 +14,7 @@ struct ModelInfo: Equatable {
     /// Measured peak memory and paragraph time (PLAN.md §3 benchmark, text-only `llama-server`).
     let peakMemoryGB: Double
     let paragraphSeconds: Double
-    /// Errors fixed out of 45 on the shipped file (progress.md, eval on the bundled `llama-server`).
+    /// Errors fixed out of 45 on the shipped file (eval on the bundled `llama-server`).
     let errorsFixed: Int
     /// One or two words on the onboarding card ("Most accurate").
     let tagline: String

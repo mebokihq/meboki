@@ -404,7 +404,7 @@
   {
    "name": "C_terminal_session",
    "kind": "code",
-   "text": "andrey@mac ~/Projects % git status\nOn branch master\nChanges not staged for commit:\n  modified:   App/Sources/Proofreader/AppDelegate.swift\n\nno changes added to commit"
+   "text": "user@mac ~/Projects % git status\nOn branch master\nChanges not staged for commit:\n  modified:   App/Sources/Meboki/AppDelegate.swift\n\nno changes added to commit"
   },
   {
    "name": "C_python_traceback",

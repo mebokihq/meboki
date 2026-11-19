@@ -270,7 +270,7 @@ public enum CodeDetector {
     static let shellScript = try! NSRegularExpression(pattern: #"^[A-Z_][A-Z0-9_]*=\S|"\$\{?[A-Z_][A-Z0-9_]*|\$\([a-z]|^set -[a-z]+\b|^(?:if|elif|while) \[\[? "#)
     /// SQL that prose never has: `SELECT … FROM users`, `COUNT(o.id)`, `VALUES (`, `o.user_id = u.id`.
     static let sqlStatement = try! NSRegularExpression(pattern: #"^(?:SELECT|INSERT INTO|UPDATE|DELETE FROM)\s.*(?:\b[A-Z]{2,}\(|\bFROM\s+[a-z_]|\bVALUES\s*\()|\b[a-z_]\w*\.[a-z_]\w*\s*=\s*[a-z_]\w*\.[a-z_]\w*"#)
-    /// `$ git status`, `user@host:~/x$ make`, `andrey@mac ~/Projects % git status`: a prompt, then a lowercase
+    /// `$ git status`, `user@host:~/x$ make`, `user@mac ~/Projects % git status`: a prompt, then a lowercase
     /// command (`$ 5` isn't one; `>>> ` is a chat quote more often than Python).
     static let shellPrompt = try! NSRegularExpression(pattern: #"^\$\s+[a-z./~][\w./~-]*(?:\s|$)|^[\w.-]+@[\w.-]+(?::|\s+)[~/]\S*\s*[$%#]\s+\S"#)
 
