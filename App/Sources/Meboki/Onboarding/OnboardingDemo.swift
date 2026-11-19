@@ -10,7 +10,7 @@ enum OnboardingDemo {
     private static var demoLicence: LicenceManager?
 
     static func show(step: OnboardingStep, dark: Bool, trusted: Bool, downloading: Bool) {
-        let suite = "dev.local.meboki.onboarding-demo"
+        let suite = "com.meboki.app.onboarding-demo"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let settings = AppSettings(defaults: defaults)

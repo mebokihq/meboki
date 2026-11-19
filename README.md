@@ -8,7 +8,7 @@ Status: Milestone A (hotkey proofreading), plus Milestone B: with the local mode
 
 - Apple Silicon Mac, macOS 14+
 - Xcode 26 (selected with `xcode-select`), CMake (`brew install cmake`)
-- A code-signing identity named `Local Code Signing` in the login keychain (see [Signing certificate](#signing-certificate)). Override with `SIGN_IDENTITY=…`.
+- A code-signing identity named `Local Code Signing` in the login keychain (see [Signing certificate](#signing-certificate)), or a Developer ID Application identity. Override with `SIGN_IDENTITY=…`.
 - ~5 GB disk for the model (downloaded on first launch)
 
 ## Build and run
@@ -32,7 +32,8 @@ Menu bar: a click on the icon opens the popover: status, **Check focused field**
 Local builds need no Developer ID, notarization or DMG: apps built on the same Mac aren't quarantined. They do need a
 **stable signing identity**, so the Accessibility grant survives rebuilds. `Scripts/make-app.sh` signs the app and the
 bundled `llama-server` with a self-signed code-signing certificate named `Local Code Signing` in the login keychain.
-Create it once (Keychain Access › Certificate Assistant › Create a Certificate, Self-Signed Root, type Code Signing,
+(When the keychain holds a Developer ID Application identity, the script uses that instead, with the hardened runtime
+and a secure timestamp, which is what notarization needs; `SIGN_IDENTITY` overrides both.) Create it once (Keychain Access › Certificate Assistant › Create a Certificate, Self-Signed Root, type Code Signing,
 does the same):
 
 ```sh
@@ -92,6 +93,8 @@ Scripts/test-update.sh            # installs the current version with a local fe
 # in the app: right-click the menu-bar icon › Check for Updates…
 Scripts/make-app.sh --install     # afterwards: back to the plain build
 ```
+
+Official releases are made with `Scripts/release.sh <version> <build> [--notes notes.html] [--publish]`: a Developer ID build with the updater on, notarized and stapled, in a signed and notarized DMG, plus the `appcast.xml` that announces it (signed with the update key from the login keychain). `--publish` tags the commit and creates the GitHub release with both files. The script lists what it needs at the top.
 
 ## Trial, free mode and licence
 

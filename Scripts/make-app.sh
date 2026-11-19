@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
-# Builds Meboki.app, bundles llama-server, and signs both with the local certificate.
+# Builds Meboki.app, bundles llama-server, and signs everything.
 # Usage: Scripts/make-app.sh [--debug] [--install]
+#
+# Signing identity: SIGN_IDENTITY if set; else a "Developer ID Application" identity from the keychain if there
+# is one (hardened runtime + secure timestamp, as notarization needs; the timestamp needs the network); else the
+# self-signed "Local Code Signing" certificate (README › Signing certificate). Keep using the same identity:
+# another one resets the Accessibility permission.
 #   --install  copies the app to ~/Applications and opens it
 #   --debug    DEBUG configuration: debug menus, demo flags, and licence keys from test payments are accepted
 #
@@ -13,7 +18,17 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-IDENTITY="${SIGN_IDENTITY:-Local Code Signing}"
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  IDENTITY="$SIGN_IDENTITY"
+else
+  IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -1)"
+  IDENTITY="${IDENTITY:-Local Code Signing}"
+fi
+BUNDLE_ID="com.meboki.app"
+SIGN=(codesign --force --sign "$IDENTITY")
+case "$IDENTITY" in
+  "Developer ID Application:"*) SIGN+=(--options runtime --timestamp) ;;
+esac
 APP="${MEBOKI_APP_DIR:-$ROOT/build/Meboki.app}"
 LLAMA="$ROOT/Vendor/bin/llama-server"
 
@@ -71,15 +86,15 @@ fi
 # Sign from the inside out: the updater's helpers, the framework, llama-server, then the app. Same identity
 # every build keeps the Accessibility grant.
 FW="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
-codesign --force --sign "$IDENTITY" "$FW/XPCServices/Installer.xpc"
-codesign --force --sign "$IDENTITY" --preserve-metadata=entitlements "$FW/XPCServices/Downloader.xpc"
-codesign --force --sign "$IDENTITY" "$FW/Autoupdate"
-codesign --force --sign "$IDENTITY" "$FW/Updater.app"
-codesign --force --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
-codesign --force --sign "$IDENTITY" --identifier dev.local.meboki.llama-server "$APP/Contents/MacOS/llama-server"
-codesign --force --sign "$IDENTITY" --identifier dev.local.meboki "$APP"
+"${SIGN[@]}" "$FW/XPCServices/Installer.xpc"
+"${SIGN[@]}" --preserve-metadata=entitlements "$FW/XPCServices/Downloader.xpc"
+"${SIGN[@]}" "$FW/Autoupdate"
+"${SIGN[@]}" "$FW/Updater.app"
+"${SIGN[@]}" "$APP/Contents/Frameworks/Sparkle.framework"
+"${SIGN[@]}" --identifier "$BUNDLE_ID.llama-server" "$APP/Contents/MacOS/llama-server"
+"${SIGN[@]}" --identifier "$BUNDLE_ID" "$APP"
 codesign --verify --deep --strict --verbose=1 "$APP"
-echo "Built $APP ($CONFIG)"
+echo "Built $APP ($CONFIG), signed by $IDENTITY"
 
 if [ "$INSTALL" = 1 ]; then
   DEST="$HOME/Applications/Meboki.app"

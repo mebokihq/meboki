@@ -16,9 +16,9 @@ enum LicenceDemo {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("meboki-licence-demo")
         try? FileManager.default.removeItem(at: dir)
         // Older demo builds kept a Keychain item here; demos use none now.
-        TrialStore.removeKeychainItem(service: "dev.local.meboki.trial.demo")
+        TrialStore.removeKeychainItem(service: "com.meboki.app.trial.demo")
         let licence = LicenceManager(licenceStore: LicenceStore(directory: dir),
-                                     trialStore: TrialStore(defaults: defaults, service: "dev.local.meboki.trial.demo",
+                                     trialStore: TrialStore(defaults: defaults, service: "com.meboki.app.trial.demo",
                                                             keychain: false),
                                      defaults: defaults, fetchEnabled: false, observeSystem: false,
                                      joinKeychain: false)
@@ -99,7 +99,7 @@ enum PopoverDemo {
     private static var licence: LicenceManager?
 
     static func show(licenceState: String?, dark: Bool) {
-        let suite = "dev.local.meboki.popover-demo"
+        let suite = "com.meboki.app.popover-demo"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let settings = AppSettings(defaults: defaults)

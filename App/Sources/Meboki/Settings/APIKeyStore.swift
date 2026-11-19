@@ -4,12 +4,12 @@ import Security
 
 /// BYOK API keys, one per cloud provider, in the login Keychain only (PLAN.md §6 "No secrets in the client").
 /// Never in `UserDefaults`, logs or the app bundle. The item is owned by the app's code signature
-/// (`Local Code Signing`), so reading it doesn't prompt.
+/// that saved it, so reading it doesn't prompt.
 enum APIKeyStore {
-    private static let service = "dev.local.meboki.api-key"
+    private static let service = "com.meboki.app.api-key"
 
-    /// The service of builds from before the rename (`LegacyMigration`). A key found there is copied to `service`.
-    private static let legacyService = "dev.local.proofreader.api-key"
+    /// The services of older builds (`LegacyMigration`), newest first. A key found there is copied to `service`.
+    private static let legacyServices = ["dev.local.meboki.api-key", "dev.local.proofreader.api-key"]
 
     private static func query(_ provider: CloudProvider, service: String = service) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
@@ -21,9 +21,12 @@ enum APIKeyStore {
         if let key = read(query(provider)) { return key }
         // Older builds signed with another identifier own the old item, so this read may ask for the
         // keychain password once; after the copy, the new item is ours and reads don't prompt.
-        guard let old = read(query(provider, service: legacyService)) else { return nil }
-        _ = save(old, for: provider)
-        return old
+        for legacy in legacyServices {
+            guard let old = read(query(provider, service: legacy)) else { continue }
+            _ = save(old, for: provider)
+            return old
+        }
+        return nil
     }
 
     private static func read(_ base: [String: Any]) -> String? {
@@ -53,7 +56,9 @@ enum APIKeyStore {
 
     static func remove(_ provider: CloudProvider) {
         SecItemDelete(query(provider) as CFDictionary)
-        SecItemDelete(query(provider, service: legacyService) as CFDictionary)  // or `key(for:)` copies it back
+        for legacy in legacyServices {  // or `key(for:)` copies it back
+            SecItemDelete(query(provider, service: legacy) as CFDictionary)
+        }
     }
 
     private static func message(_ status: OSStatus) -> String {

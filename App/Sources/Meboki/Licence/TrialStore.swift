@@ -11,13 +11,13 @@ import Security
 /// the answer when it comes. Keychain writes are queued the same way.
 struct TrialStore {
     /// Every Keychain call of the app runs here, in order.
-    static let queue = DispatchQueue(label: "dev.local.meboki.trial-keychain", qos: .utility)
+    static let queue = DispatchQueue(label: "com.meboki.app.trial-keychain", qos: .utility)
 
     /// The real service; builds that aren't the installed app (a `swift build` binary) get their own suffix, so
     /// a debug run never touches the installed app's trial.
     static var defaultService: String {
-        let real = "dev.local.meboki.trial"
-        return Bundle.main.bundleIdentifier == "dev.local.meboki" ? real : real + ".debug"
+        let real = "com.meboki.app.trial"
+        return Bundle.main.bundleIdentifier == LegacyMigration.bundleID ? real : real + ".debug"
     }
 
     let defaults: UserDefaults

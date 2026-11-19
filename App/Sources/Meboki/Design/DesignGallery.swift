@@ -110,8 +110,8 @@ private enum GallerySamples {
     }
 
     static func settings(paused: Bool) -> AppSettings {
-        let defaults = UserDefaults(suiteName: "dev.local.meboki.gallery.\(paused)")!
-        defaults.removePersistentDomain(forName: "dev.local.meboki.gallery.\(paused)")
+        let defaults = UserDefaults(suiteName: "com.meboki.app.gallery.\(paused)")!
+        defaults.removePersistentDomain(forName: "com.meboki.app.gallery.\(paused)")
         let s = AppSettings(defaults: defaults)
         s.underlineAsYouType = !paused
         if paused { s.setPaused(true, bundleID: "com.apple.Safari") }

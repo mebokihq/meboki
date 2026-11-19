@@ -11,7 +11,7 @@ enum SettingsDemo {
     private static var subscriptions: Set<AnyCancellable> = []
 
     static func show(pane: SettingsPane, dark: Bool, recording: Bool, bubble: Bool, licenceState: String? = nil) {
-        let suite = "dev.local.meboki.settings-demo"
+        let suite = "com.meboki.app.settings-demo"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
         let settings = AppSettings(defaults: defaults)

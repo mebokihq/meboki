@@ -1,19 +1,31 @@
 import Foundation
 
-/// One-time move of data left by builds from before the rename to Meboki (bundle ID `dev.local.proofreader`):
-/// settings, downloaded models, the practice note and logs. Runs before anything reads them (`main.swift`), only
-/// in the bundled app, so a debug binary never moves the real data. Never overwrites: a step whose target already
-/// exists is skipped. API keys are moved lazily by `APIKeyStore` (reading the old Keychain item may prompt).
+/// One-time moves of data left by older builds. Runs before anything reads them (`main.swift`), only in the
+/// bundled app, so a debug binary never moves the real data. Never overwrites: a key or file that already
+/// exists is kept.
+///
+/// - Bundle ID `dev.local.meboki` (local builds before the release bundle ID `com.meboki.app`): its settings.
+///   Files live in folders named after the app (`Application Support/Meboki`, `Logs/Meboki`), so they stay put.
+/// - Bundle ID `dev.local.proofreader` (builds from before the rename to Meboki): settings, downloaded models,
+///   the practice note and logs.
+///
+/// API keys are moved lazily by `APIKeyStore` (reading an old Keychain item may prompt once). The trial's
+/// Keychain copy isn't read from the old service (that read could prompt); its `UserDefaults` copy comes over
+/// with the settings and is written to the new Keychain service on the next trial update.
 enum LegacyMigration {
-    static let legacyBundleID = "dev.local.proofreader"
-    private static let doneKey = "migratedFromProofreader"
+    static let bundleID = "com.meboki.app"
+    static let devBundleID = "dev.local.meboki"
+    static let proofreaderBundleID = "dev.local.proofreader"
+    private static let doneKey = "migratedFromDevLocal"
 
     static func run() {
-        guard Bundle.main.bundleIdentifier == "dev.local.meboki" else { return }
+        guard Bundle.main.bundleIdentifier == bundleID else { return }
         let defaults = UserDefaults.standard
         guard !defaults.bool(forKey: doneKey) else { return }
 
-        if let old = defaults.persistentDomain(forName: legacyBundleID), !old.isEmpty {
+        // Newest first: a key set by both old builds takes the `dev.local.meboki` value.
+        for legacy in [devBundleID, proofreaderBundleID] {
+            guard let old = defaults.persistentDomain(forName: legacy), !old.isEmpty else { continue }
             for (key, value) in old where defaults.object(forKey: key) == nil {
                 defaults.set(value, forKey: key)
             }
