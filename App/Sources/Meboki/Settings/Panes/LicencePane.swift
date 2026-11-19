@@ -132,7 +132,7 @@ struct LicencePane: View {
     @ViewBuilder private var getGroups: some View {
         SettingsGroupHeader("Get a licence")
         SettingsGroup {
-            SettingsRow("Unlock everything", subtitle: "One payment. The key arrives by email.") {
+            SettingsRow("Unlock everything", subtitle: "One payment. No subscription. Stays with you forever. The key arrives by email.") {
                 Button("Buy a Licence") { NSWorkspace.shared.open(LicenceManager.buyURL) }
                     .buttonStyle(.dsPrimary)
             }

@@ -43,6 +43,8 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Onboarding/OnboardingDemo.swift     DEBUG `--onboarding-demo <step> [--dark] [--trusted] [--downloading]` for screenshots
   Settings/AppSettings.swift    UserDefaults-backed settings (popup style, writing options, appModes, checkedApps, hotkey, logSnippets, showInMenuBar, …)
   Licence/LicenceManager.swift  licence state (`entitlement`: licensed / trial / free), activation, `recordCheck` per real check, daily revoked-list fetch, `transitions`; Licence/LicenceStore (key + revoked list files), TrialStore (Keychain + UserDefaults), LicenceCLI (DEBUG `--licence-status`, `--verify-licence <key>`)
+  Licence/LicenceDebug.swift    DEBUG: `DebugClock` (the licence manager's clock = real time + an offset kept in UserDefaults), `DebugSigner` (signs test keys and revoked lists with the test-payment key read from the login Keychain, `meboki` / `app-license-sandbox-private-key`)
+  Settings/Panes/DebugPane.swift  DEBUG: Settings › Debug: live licence status; trial presets (past days, last day, end), clock jumps (23:59:50, +1 h, +1 day, real time), onboarding reset (+ open), test keys (activate, corporate ending tomorrow, copy, activation link), revoke / clear / fetch the revoked list. Build with `Scripts/make-app.sh --debug --install`
   Licence/TrialEndedWindow.swift  the one-time notice window (trial ended / key no longer valid), `TrialEndedView`, `TrialEndedWindowController` (shown without activating)
   Licence/LicenceDemo.swift     DEBUG demos: `LicenceDemo` (own manager forced into a state), `TrialEndedDemo`, `PopoverDemo`, `DemoSnapshot`
   Settings/APIKeyStore.swift    BYOK API keys in the login Keychain (one item per provider)

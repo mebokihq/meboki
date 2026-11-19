@@ -6,6 +6,9 @@ import SwiftUI
 /// Settings panes (design_code.md §8), in sidebar order.
 enum SettingsPane: String, CaseIterable, Identifiable {
     case general, writing, models, apps, shortcuts, privacy, licence, about
+    #if DEBUG
+    case debug
+    #endif
 
     var id: String { rawValue }
 
@@ -19,6 +22,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .privacy: "Privacy"
         case .licence: "Licence"
         case .about: "About"
+        #if DEBUG
+        case .debug: "Debug"
+        #endif
         }
     }
 
@@ -32,6 +38,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .privacy: "lock.shield"
         case .licence: "key.fill"
         case .about: "info.circle"
+        #if DEBUG
+        case .debug: "ladybug"
+        #endif
         }
     }
 
@@ -47,6 +56,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .privacy: rgb = 0x30B850
         case .licence: rgb = 0x30B0C7
         case .about: rgb = 0x636366
+        #if DEBUG
+        case .debug: rgb = 0xFF453A
+        #endif
         }
         return Color(nsColor: .hex(rgb))
     }
@@ -71,6 +83,9 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .licence: ["Licence", "License", "Trial", "Free mode", "Activate", "Buy a Licence", "Licence key", "Key",
                         "Paste", "Remove Licence", "Lost your key", "Refund", "Unlock", "What a licence adds"]
         case .about: ["Version", "Source code", "Acknowledgements", "Licensed to", "Welcome Guide", "Onboarding", "Accessibility"]
+        #if DEBUG
+        case .debug: ["Debug", "Trial", "Clock", "Revoke", "Test key"]
+        #endif
         }
     }
 
@@ -228,6 +243,9 @@ struct SettingsRootView: View {
         case .privacy: PrivacyPane(model: model, settings: settings)
         case .licence: LicencePane(model: model, settings: settings, licence: model.licence)
         case .about: AboutPane(model: model, licence: model.licence)
+        #if DEBUG
+        case .debug: DebugPane(model: model, settings: settings, licence: model.licence)
+        #endif
         }
     }
 }

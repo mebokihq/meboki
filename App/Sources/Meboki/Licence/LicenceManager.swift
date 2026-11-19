@@ -35,7 +35,12 @@ extension Calendar {
 /// Everything is checked on this Mac; the only network call is the daily revoked-list download.
 @MainActor
 final class LicenceManager: ObservableObject {
+    #if DEBUG
+    /// DEBUG builds read the clock through `DebugClock`, so Settings › Debug can move the trial's "now".
+    static let shared = LicenceManager(now: { DebugClock.now })
+    #else
     static let shared = LicenceManager()
+    #endif
 
     struct Transition {
         let from: Entitlement
@@ -63,6 +68,9 @@ final class LicenceManager: ObservableObject {
     /// The last revoked-list request, successful or not (in memory): a failed one is retried after 10 minutes.
     private var lastAttempt: Date?
     private var retryItem: DispatchWorkItem?
+    #if DEBUG
+    private var debugDayTimer: Timer?
+    #endif
 
     private static let lastFetchKey = "revokedLastFetch"
     private static let fetchInterval: TimeInterval = 24 * 3600
@@ -172,6 +180,9 @@ final class LicenceManager: ObservableObject {
     func start() {
         refresh()
         fetchRevokedIfDue()
+        #if DEBUG
+        debugWatchFakeDay()
+        #endif
     }
 
     private func startObserving() {
@@ -370,6 +381,80 @@ final class LicenceManager: ObservableObject {
         AppSettings.shared.resetLicenceNotices()
         refresh()
     }
+
+    /// Sets the trial to `past` days before today (by the trial's clock), plus today when `today` is true.
+    func debugSetTrial(pastDays past: Int, today: Bool) {
+        let n = now()
+        var days = (0..<max(0, past)).map {
+            TrialClock.dayString(n.addingTimeInterval(-Double($0 + 1) * 86_400), calendar: calendar)
+        }
+        if today { days.append(TrialClock.dayString(n, calendar: calendar)) }
+        applyDebugTrial(TrialClock(days: days, lastSeen: TrialClock.dayString(n, calendar: calendar)))
+    }
+
+    /// Only the one-shot notice flags.
+    func debugResetNotices() {
+        AppSettings.shared.resetLicenceNotices()
+        publish()
+    }
+
+    /// Moves the trial's clock by `seconds` from real time (0 = real time). Going back to real time also moves
+    /// the trial's "latest day seen" back, so the rollback guard doesn't end a trial the fake clock pushed ahead.
+    func debugSetClockOffset(_ seconds: TimeInterval) {
+        DebugClock.offset = seconds
+        if seconds == 0 {
+            applyDebugTrial(TrialClock(days: trial.days, lastSeen: TrialClock.dayString(Date(), calendar: calendar)))
+        }
+        refresh()
+        debugWatchFakeDay()
+    }
+
+    /// Fake clock to `secondsBefore` seconds before the next midnight (of the trial's clock).
+    func debugJumpToBeforeMidnight(secondsBefore: TimeInterval) {
+        let n = now()
+        guard let midnight = calendar.nextDate(after: n, matching: DateComponents(hour: 0, minute: 0, second: 0),
+                                               matchingPolicy: .nextTime) else { return }
+        debugSetClockOffset(DebugClock.offset + midnight.timeIntervalSince(n) - secondsBefore)
+    }
+
+    /// While the clock is fake, the system's day-change notice comes at the wrong time: check the fake day every
+    /// second and refresh when it changes.
+    private func debugWatchFakeDay() {
+        debugDayTimer?.invalidate()
+        debugDayTimer = nil
+        guard DebugClock.offset != 0 else { return }
+        var day = TrialClock.dayString(now(), calendar: calendar)
+        debugDayTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let d = TrialClock.dayString(self.now(), calendar: self.calendar)
+                guard d != day else { return }
+                day = d
+                Log.write("licence: fake clock reached \(d)")
+                self.refresh()
+            }
+        }
+    }
+
+    /// Installs a signed revoked list (from Settings › Debug) as if it had been downloaded.
+    func debugInstallRevoked(_ body: Data) -> Bool {
+        guard let list = RevokedList.parse(body) else { return false }
+        licenceStore.saveRevoked(body)
+        revoked = list
+        publish()
+        return true
+    }
+
+    func debugClearRevoked() {
+        licenceStore.removeRevoked()
+        revoked = nil
+        publish()
+    }
+
+    /// For Settings › Debug.
+    var debugRevoked: RevokedList? { revoked }
+    var debugKey: Result<LicenceInfo, LicenceError>? { key }
+    var debugNow: Date { now() }
 
     /// Screenshot demos only: shows `entitlement` and `trial` as given, without touching any store.
     func debugForce(_ entitlement: Entitlement, trial: TrialClock) {
