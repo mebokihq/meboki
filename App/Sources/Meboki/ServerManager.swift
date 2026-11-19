@@ -50,9 +50,13 @@ final class ServerManager {
         return dir.appendingPathComponent("llama-server.log")
     }()
 
-    /// Bundled binary; `MEBOKI_LLAMA_SERVER` overrides it when running outside the .app.
+    /// Bundled binary; in DEBUG builds `MEBOKI_LLAMA_SERVER` overrides it when running outside the .app.
+    /// Release builds ignore it: the server runs inside Meboki's Accessibility trust, so a variable set with
+    /// `launchctl setenv` must not be able to pick the binary.
     static var executable: URL? {
+        #if DEBUG
         if let p = ProcessInfo.processInfo.environment["MEBOKI_LLAMA_SERVER"] { return URL(fileURLWithPath: p) }
+        #endif
         return Bundle.main.url(forAuxiliaryExecutable: "llama-server")
     }
 
