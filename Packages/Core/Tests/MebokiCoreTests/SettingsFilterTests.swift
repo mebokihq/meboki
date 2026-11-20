@@ -186,8 +186,9 @@ func fixed(_ input: String, _ output: String, _ options: CheckOptions) -> String
         #expect(uk.hasPrefix("You are a proofreader."))
         #expect(uk.hasSuffix("<text>The colour is nice.</text> -> The colour is nice."))
         #expect(uk == Prompt.system(for: .uk))  // byte-identical within a session
-        #expect(uk.replacingOccurrences(of: " The writer uses British English: never change British spelling or usage to American "
-            + "(colour, organise, centre, travelled, cancelled, grey, \"the team are\").", with: "") == Prompt.system)
+        #expect(uk.replacingOccurrences(of: " The writer uses British English: never change any British spelling or usage to American. "
+            + "This covers every British form, not only these examples: colour, organise, centre, travelled, "
+            + "cancelled, grey, \"the team are\".", with: "") == Prompt.system)
     }
 }
 

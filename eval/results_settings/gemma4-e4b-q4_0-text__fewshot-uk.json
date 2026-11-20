@@ -2,7 +2,7 @@
  "model": "gemma4-e4b-q4_0-text",
  "prompt": "fewshot-uk",
  "warm_load_s": 0,
- "ps": "RSS 4.79 GB",
+ "ps": "RSS 4.46 GB",
  "rows": [
   {
    "kind": "err",
@@ -14,12 +14,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1444089412689209,
+   "wall": 0.15327692031860352,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.046549999999999994,
+   "prompt_s": 0.051662999999999994,
    "gen_tokens": 8,
-   "gen_s": 0.09469499999999999
+   "gen_s": 0.09843
   },
   {
    "kind": "err",
@@ -31,12 +31,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.11612701416015625,
+   "wall": 0.11353802680969238,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.044923000000000005,
+   "prompt_s": 0.044261,
    "gen_tokens": 6,
-   "gen_s": 0.06847199999999999
+   "gen_s": 0.066553
   },
   {
    "kind": "err",
@@ -48,12 +48,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.19300079345703125,
+   "wall": 0.1680011749267578,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046045,
+   "prompt_s": 0.044312,
    "gen_tokens": 10,
-   "gen_s": 0.1444
+   "gen_s": 0.120784
   },
   {
    "kind": "err",
@@ -65,12 +65,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.14454984664916992,
+   "wall": 0.1452779769897461,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.045831000000000004,
+   "prompt_s": 0.044078000000000006,
    "gen_tokens": 8,
-   "gen_s": 0.09606100000000001
+   "gen_s": 0.098287
   },
   {
    "kind": "err",
@@ -82,12 +82,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1317288875579834,
+   "wall": 0.13314604759216309,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046357,
+   "prompt_s": 0.044025,
    "gen_tokens": 7,
-   "gen_s": 0.08282099999999999
+   "gen_s": 0.086173
   },
   {
    "kind": "err",
@@ -99,12 +99,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.14388799667358398,
+   "wall": 0.14270377159118652,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046074,
+   "prompt_s": 0.044191,
    "gen_tokens": 8,
-   "gen_s": 0.095381
+   "gen_s": 0.09583799999999999
   },
   {
    "kind": "err",
@@ -116,12 +116,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1438140869140625,
+   "wall": 0.14391207695007324,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.04574,
+   "prompt_s": 0.044766,
    "gen_tokens": 8,
-   "gen_s": 0.095417
+   "gen_s": 0.096041
   },
   {
    "kind": "err",
@@ -133,12 +133,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1616380214691162,
+   "wall": 0.171278715133667,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.063647,
+   "prompt_s": 0.062203,
    "gen_tokens": 8,
-   "gen_s": 0.09544899999999999
+   "gen_s": 0.10629000000000001
   },
   {
    "kind": "err",
@@ -150,12 +150,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.11793112754821777,
+   "wall": 0.1281430721282959,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046408,
+   "prompt_s": 0.050264,
    "gen_tokens": 6,
-   "gen_s": 0.069037
+   "gen_s": 0.073327
   },
   {
    "kind": "err",
@@ -167,12 +167,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.16454601287841797,
+   "wall": 0.16162490844726562,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06417199999999999,
+   "prompt_s": 0.063581,
    "gen_tokens": 8,
-   "gen_s": 0.097706
+   "gen_s": 0.09528400000000001
   },
   {
    "kind": "err",
@@ -185,12 +185,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1420879364013672,
+   "wall": 0.15187597274780273,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.057944,
+   "prompt_s": 0.045071,
    "gen_tokens": 7,
-   "gen_s": 0.08161700000000001
+   "gen_s": 0.103979
   },
   {
    "kind": "err",
@@ -202,12 +202,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.17480707168579102,
+   "wall": 0.19900202751159668,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.063479,
+   "prompt_s": 0.082883,
    "gen_tokens": 9,
-   "gen_s": 0.108777
+   "gen_s": 0.11256100000000001
   },
   {
    "kind": "err",
@@ -219,12 +219,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1432790756225586,
+   "wall": 0.14740705490112305,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045329,
+   "prompt_s": 0.045905999999999995,
    "gen_tokens": 8,
-   "gen_s": 0.09542300000000001
+   "gen_s": 0.09883499999999999
   },
   {
    "kind": "err",
@@ -236,12 +236,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.18935585021972656,
+   "wall": 0.19136524200439453,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.064408,
+   "prompt_s": 0.06266,
    "gen_tokens": 10,
-   "gen_s": 0.121961
+   "gen_s": 0.125982
   },
   {
    "kind": "err",
@@ -253,12 +253,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.17768406867980957,
+   "wall": 0.1798698902130127,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.064984,
+   "prompt_s": 0.062664,
    "gen_tokens": 9,
-   "gen_s": 0.109785
+   "gen_s": 0.114094
   },
   {
    "kind": "err",
@@ -270,12 +270,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.20047998428344727,
+   "wall": 0.1803300380706787,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06571500000000001,
+   "prompt_s": 0.06597499999999999,
    "gen_tokens": 9,
-   "gen_s": 0.131532
+   "gen_s": 0.110974
   },
   {
    "kind": "err",
@@ -287,12 +287,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.19111108779907227,
+   "wall": 0.1949923038482666,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065031,
+   "prompt_s": 0.06369899999999999,
    "gen_tokens": 10,
-   "gen_s": 0.12313500000000001
+   "gen_s": 0.12829
   },
   {
    "kind": "err",
@@ -305,12 +305,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.17807316780090332,
+   "wall": 0.1736159324645996,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065104,
+   "prompt_s": 0.062467,
    "gen_tokens": 9,
-   "gen_s": 0.110106
+   "gen_s": 0.10811499999999999
   },
   {
    "kind": "err",
@@ -326,12 +326,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.20259308815002441,
+   "wall": 0.19850707054138184,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06437000000000001,
+   "prompt_s": 0.06258899999999999,
    "gen_tokens": 11,
-   "gen_s": 0.13522
+   "gen_s": 0.133036
   },
   {
    "kind": "err",
@@ -346,12 +346,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.16887879371643066,
+   "wall": 0.16832590103149414,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045625,
+   "prompt_s": 0.045035,
    "gen_tokens": 10,
-   "gen_s": 0.120649
+   "gen_s": 0.120628
   },
   {
    "kind": "err",
@@ -363,12 +363,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.12991881370544434,
+   "wall": 0.12766098976135254,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045423000000000005,
+   "prompt_s": 0.043847000000000004,
    "gen_tokens": 7,
-   "gen_s": 0.081981
+   "gen_s": 0.08120699999999999
   },
   {
    "kind": "err",
@@ -380,12 +380,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1329810619354248,
+   "wall": 0.11574387550354004,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.044825000000000004,
+   "prompt_s": 0.044052,
    "gen_tokens": 6,
-   "gen_s": 0.08592
+   "gen_s": 0.068955
   },
   {
    "kind": "err",
@@ -398,12 +398,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.18955016136169434,
+   "wall": 0.18515515327453613,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.06446299999999999,
+   "prompt_s": 0.062085,
    "gen_tokens": 10,
-   "gen_s": 0.122726
+   "gen_s": 0.12021
   },
   {
    "kind": "err",
@@ -416,12 +416,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.19198274612426758,
+   "wall": 0.18879413604736328,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065598,
+   "prompt_s": 0.061297,
    "gen_tokens": 10,
-   "gen_s": 0.123184
+   "gen_s": 0.12489199999999999
   },
   {
    "kind": "err",
@@ -433,12 +433,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.20208120346069336,
+   "wall": 0.19481515884399414,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.064166,
+   "prompt_s": 0.062334,
    "gen_tokens": 11,
-   "gen_s": 0.13514400000000001
+   "gen_s": 0.129721
   },
   {
    "kind": "err",
@@ -450,12 +450,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1324758529663086,
+   "wall": 0.13602185249328613,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046738999999999996,
+   "prompt_s": 0.044829,
    "gen_tokens": 7,
-   "gen_s": 0.08256699999999999
+   "gen_s": 0.088419
   },
   {
    "kind": "err",
@@ -467,12 +467,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13173580169677734,
+   "wall": 0.13970303535461426,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046555,
+   "prompt_s": 0.047765,
    "gen_tokens": 7,
-   "gen_s": 0.08215900000000001
+   "gen_s": 0.08924699999999999
   },
   {
    "kind": "err",
@@ -486,12 +486,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1462540626525879,
+   "wall": 0.14553189277648926,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.047284,
+   "prompt_s": 0.046106,
    "gen_tokens": 8,
-   "gen_s": 0.096004
+   "gen_s": 0.096631
   },
   {
    "kind": "err",
@@ -503,12 +503,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.16614890098571777,
+   "wall": 0.1429297924041748,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045367,
+   "prompt_s": 0.043984,
    "gen_tokens": 8,
-   "gen_s": 0.118331
+   "gen_s": 0.096203
   },
   {
    "kind": "err",
@@ -520,12 +520,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.11716675758361816,
+   "wall": 0.11248993873596191,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.045311,
+   "prompt_s": 0.043482,
    "gen_tokens": 6,
-   "gen_s": 0.069278
+   "gen_s": 0.06625199999999999
   },
   {
    "kind": "err",
@@ -539,12 +539,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1446239948272705,
+   "wall": 0.14452409744262695,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045545999999999996,
+   "prompt_s": 0.045127,
    "gen_tokens": 8,
-   "gen_s": 0.096591
+   "gen_s": 0.096696
   },
   {
    "kind": "err",
@@ -557,12 +557,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.18936896324157715,
+   "wall": 0.19573211669921875,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.064015,
+   "prompt_s": 0.06942100000000001,
    "gen_tokens": 10,
-   "gen_s": 0.122811
+   "gen_s": 0.122522
   },
   {
    "kind": "err",
@@ -574,12 +574,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13032293319702148,
+   "wall": 0.13108301162719727,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045854,
+   "prompt_s": 0.044195,
    "gen_tokens": 7,
-   "gen_s": 0.081966
+   "gen_s": 0.083258
   },
   {
    "kind": "err",
@@ -592,12 +592,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.14299798011779785,
+   "wall": 0.14327692985534668,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045373,
+   "prompt_s": 0.044459000000000005,
    "gen_tokens": 8,
-   "gen_s": 0.09518399999999999
+   "gen_s": 0.096212
   },
   {
    "kind": "err",
@@ -610,12 +610,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1314089298248291,
+   "wall": 0.1377718448638916,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046454,
+   "prompt_s": 0.047905,
    "gen_tokens": 7,
-   "gen_s": 0.08222
+   "gen_s": 0.08723399999999999
   },
   {
    "kind": "err",
@@ -627,12 +627,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.2646148204803467,
+   "wall": 0.24121904373168945,
    "load": 0,
    "prompt_tokens": 27,
-   "prompt_s": 0.06322,
+   "prompt_s": 0.063836,
    "gen_tokens": 14,
-   "gen_s": 0.198875
+   "gen_s": 0.17458600000000002
   },
   {
    "kind": "err",
@@ -644,12 +644,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.17794394493103027,
+   "wall": 0.17229509353637695,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.065103,
+   "prompt_s": 0.062528,
    "gen_tokens": 9,
-   "gen_s": 0.109569
+   "gen_s": 0.106964
   },
   {
    "kind": "err",
@@ -661,12 +661,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1447899341583252,
+   "wall": 0.14882302284240723,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046458,
+   "prompt_s": 0.044876,
    "gen_tokens": 8,
-   "gen_s": 0.09553700000000001
+   "gen_s": 0.10115099999999999
   },
   {
    "kind": "err",
@@ -678,12 +678,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.15817594528198242,
+   "wall": 0.15912771224975586,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045938,
+   "prompt_s": 0.044799,
    "gen_tokens": 9,
-   "gen_s": 0.109406
+   "gen_s": 0.11148699999999999
   },
   {
    "kind": "err",
@@ -695,12 +695,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.13404488563537598,
+   "wall": 0.13383817672729492,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.047140999999999995,
+   "prompt_s": 0.044935,
    "gen_tokens": 7,
-   "gen_s": 0.083877
+   "gen_s": 0.086091
   },
   {
    "kind": "err",
@@ -712,12 +712,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.17663908004760742,
+   "wall": 0.17899417877197266,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.064656,
+   "prompt_s": 0.062455,
    "gen_tokens": 9,
-   "gen_s": 0.10886499999999999
+   "gen_s": 0.11383199999999999
   },
   {
    "kind": "err",
@@ -729,12 +729,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.14699172973632812,
+   "wall": 0.1452620029449463,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.047577,
+   "prompt_s": 0.044932,
    "gen_tokens": 8,
-   "gen_s": 0.096228
+   "gen_s": 0.09766200000000001
   },
   {
    "kind": "err",
@@ -748,12 +748,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.268373966217041,
+   "wall": 0.2463538646697998,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.063417,
+   "prompt_s": 0.062494,
    "gen_tokens": 14,
-   "gen_s": 0.201988
+   "gen_s": 0.181097
   },
   {
    "kind": "err",
@@ -765,12 +765,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.2629530429840088,
+   "wall": 0.2655611038208008,
    "load": 0,
    "prompt_tokens": 29,
-   "prompt_s": 0.066188,
+   "prompt_s": 0.067361,
    "gen_tokens": 15,
-   "gen_s": 0.19328700000000001
+   "gen_s": 0.195396
   },
   {
    "kind": "err",
@@ -784,12 +784,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.12013888359069824,
+   "wall": 0.12209057807922363,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.047837000000000005,
+   "prompt_s": 0.046401000000000005,
    "gen_tokens": 6,
-   "gen_s": 0.069084
+   "gen_s": 0.072651
   },
   {
    "kind": "ok",
@@ -801,12 +801,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.18953800201416016,
+   "wall": 0.18946099281311035,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.062611,
+   "prompt_s": 0.063012,
    "gen_tokens": 10,
-   "gen_s": 0.12439
+   "gen_s": 0.123778
   },
   {
    "kind": "ok",
@@ -818,12 +818,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21446990966796875,
+   "wall": 0.21361804008483887,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.062755,
+   "prompt_s": 0.062679,
    "gen_tokens": 12,
-   "gen_s": 0.14928999999999998
+   "gen_s": 0.148241
   },
   {
    "kind": "ok",
@@ -835,12 +835,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.31771278381347656,
+   "wall": 0.29430294036865234,
    "load": 0,
    "prompt_tokens": 31,
-   "prompt_s": 0.08214400000000001,
+   "prompt_s": 0.064021,
    "gen_tokens": 18,
-   "gen_s": 0.232902
+   "gen_s": 0.227579
   },
   {
    "kind": "ok",
@@ -852,12 +852,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2586970329284668,
+   "wall": 0.24974799156188965,
    "load": 0,
    "prompt_tokens": 28,
-   "prompt_s": 0.06410500000000001,
+   "prompt_s": 0.063009,
    "gen_tokens": 15,
-   "gen_s": 0.191746
+   "gen_s": 0.18403899999999998
   },
   {
    "kind": "ok",
@@ -869,12 +869,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2169642448425293,
+   "wall": 0.21146702766418457,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.06481100000000001,
+   "prompt_s": 0.06336699999999999,
    "gen_tokens": 12,
-   "gen_s": 0.14857499999999998
+   "gen_s": 0.145028
   },
   {
    "kind": "ok",
@@ -886,12 +886,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2776477336883545,
+   "wall": 0.23768019676208496,
    "load": 0,
    "prompt_tokens": 27,
-   "prompt_s": 0.06565900000000001,
+   "prompt_s": 0.06310199999999999,
    "gen_tokens": 14,
-   "gen_s": 0.208632
+   "gen_s": 0.171495
   },
   {
    "kind": "ok",
@@ -903,12 +903,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21947598457336426,
+   "wall": 0.21337008476257324,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.06562,
+   "prompt_s": 0.062171,
    "gen_tokens": 12,
-   "gen_s": 0.150542
+   "gen_s": 0.148479
   },
   {
    "kind": "ok",
@@ -920,12 +920,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21654891967773438,
+   "wall": 0.21471881866455078,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.064279,
+   "prompt_s": 0.063625,
    "gen_tokens": 12,
-   "gen_s": 0.149381
+   "gen_s": 0.14805600000000002
   },
   {
    "kind": "ok",
@@ -937,12 +937,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.24311304092407227,
+   "wall": 0.24404692649841309,
    "load": 0,
    "prompt_tokens": 27,
-   "prompt_s": 0.062792,
+   "prompt_s": 0.06414700000000001,
    "gen_tokens": 14,
-   "gen_s": 0.17751
+   "gen_s": 0.17694300000000002
   },
   {
    "kind": "ok",
@@ -954,12 +954,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.20399212837219238,
+   "wall": 0.19992709159851074,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.065318,
+   "prompt_s": 0.064123,
    "gen_tokens": 11,
-   "gen_s": 0.135502
+   "gen_s": 0.13297499999999998
   },
   {
    "kind": "ok",
@@ -971,12 +971,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2299809455871582,
+   "wall": 0.19836688041687012,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.06620999999999999,
+   "prompt_s": 0.063113,
    "gen_tokens": 11,
-   "gen_s": 0.160403
+   "gen_s": 0.132572
   },
   {
    "kind": "ok",
@@ -988,12 +988,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2629399299621582,
+   "wall": 0.25737810134887695,
    "load": 0,
    "prompt_tokens": 28,
-   "prompt_s": 0.06579399999999999,
+   "prompt_s": 0.062651,
    "gen_tokens": 15,
-   "gen_s": 0.193823
+   "gen_s": 0.192086
   },
   {
    "kind": "ok",
@@ -1005,12 +1005,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.20426177978515625,
+   "wall": 0.20209002494812012,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.06541899999999999,
+   "prompt_s": 0.063539,
    "gen_tokens": 11,
-   "gen_s": 0.13575800000000002
+   "gen_s": 0.135899
   },
   {
    "kind": "ok",
@@ -1022,12 +1022,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2035839557647705,
+   "wall": 0.20561695098876953,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.064676,
+   "prompt_s": 0.063556,
    "gen_tokens": 11,
-   "gen_s": 0.135874
+   "gen_s": 0.13933
   },
   {
    "kind": "ok",
@@ -1039,12 +1039,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.23156309127807617,
+   "wall": 0.22721385955810547,
    "load": 0,
    "prompt_tokens": 26,
-   "prompt_s": 0.06369,
+   "prompt_s": 0.063509,
    "gen_tokens": 13,
-   "gen_s": 0.16480099999999998
+   "gen_s": 0.16078800000000001
   },
   {
    "kind": "ok",
@@ -1056,12 +1056,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21344494819641113,
+   "wall": 0.1925339698791504,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.064125,
+   "prompt_s": 0.063632,
    "gen_tokens": 10,
-   "gen_s": 0.14633600000000002
+   "gen_s": 0.126245
   },
   {
    "kind": "ok",
@@ -1073,12 +1073,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.20683908462524414,
+   "wall": 0.19840097427368164,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.066724,
+   "prompt_s": 0.062402,
    "gen_tokens": 11,
-   "gen_s": 0.137024
+   "gen_s": 0.133106
   },
   {
    "kind": "ok",
@@ -1090,12 +1090,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.17571377754211426,
+   "wall": 0.17664408683776855,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.063745,
+   "prompt_s": 0.062704,
    "gen_tokens": 9,
-   "gen_s": 0.109208
+   "gen_s": 0.11116200000000001
   },
   {
    "kind": "ok",
@@ -1107,12 +1107,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.27587890625,
+   "wall": 0.27613210678100586,
    "load": 0,
    "prompt_tokens": 29,
-   "prompt_s": 0.065274,
+   "prompt_s": 0.063209,
    "gen_tokens": 16,
-   "gen_s": 0.20738
+   "gen_s": 0.210177
   },
   {
    "kind": "ok",
@@ -1124,12 +1124,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.22722911834716797,
+   "wall": 0.2192070484161377,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.064792,
+   "prompt_s": 0.06668,
    "gen_tokens": 11,
-   "gen_s": 0.159298
+   "gen_s": 0.149576
   },
   {
    "kind": "ok",
@@ -1141,12 +1141,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.33078503608703613,
+   "wall": 0.3269340991973877,
    "load": 0,
    "prompt_tokens": 33,
-   "prompt_s": 0.066937,
+   "prompt_s": 0.06566899999999999,
    "gen_tokens": 20,
-   "gen_s": 0.26022199999999995
+   "gen_s": 0.258443
   },
   {
    "kind": "ok",
@@ -1158,12 +1158,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.1895432472229004,
+   "wall": 0.19115114212036133,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.064113,
+   "prompt_s": 0.063627,
    "gen_tokens": 10,
-   "gen_s": 0.122678
+   "gen_s": 0.12471800000000001
   },
   {
    "kind": "casual",
@@ -1175,12 +1175,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.16140389442443848,
+   "wall": 0.16963720321655273,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.063249,
+   "prompt_s": 0.063475,
    "gen_tokens": 8,
-   "gen_s": 0.09556999999999999
+   "gen_s": 0.102897
   },
   {
    "kind": "casual",
@@ -1192,12 +1192,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.11824798583984375,
+   "wall": 0.11493587493896484,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.046299,
+   "prompt_s": 0.044772,
    "gen_tokens": 6,
-   "gen_s": 0.068988
+   "gen_s": 0.067392
   },
   {
    "kind": "casual",
@@ -1209,12 +1209,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.14622116088867188,
+   "wall": 0.14600801467895508,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.047213,
+   "prompt_s": 0.045689999999999995,
    "gen_tokens": 8,
-   "gen_s": 0.09599500000000001
+   "gen_s": 0.097584
   },
   {
    "kind": "casual",
@@ -1226,12 +1226,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.15430307388305664,
+   "wall": 0.13175129890441895,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046759999999999996,
+   "prompt_s": 0.04543,
    "gen_tokens": 7,
-   "gen_s": 0.104441
+   "gen_s": 0.083661
   },
   {
    "kind": "casual",
@@ -1243,12 +1243,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.11780118942260742,
+   "wall": 0.12236213684082031,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.045929000000000005,
+   "prompt_s": 0.045465000000000005,
    "gen_tokens": 6,
-   "gen_s": 0.069122
+   "gen_s": 0.074022
   },
   {
    "kind": "casual",
@@ -1260,12 +1260,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.13224124908447266,
+   "wall": 0.13534188270568848,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046509,
+   "prompt_s": 0.045877,
    "gen_tokens": 7,
-   "gen_s": 0.083262
+   "gen_s": 0.086398
   },
   {
    "kind": "edge",
@@ -1277,12 +1277,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.23087072372436523,
+   "wall": 0.22663331031799316,
    "load": 0,
    "prompt_tokens": 26,
-   "prompt_s": 0.064999,
+   "prompt_s": 0.062984,
    "gen_tokens": 13,
-   "gen_s": 0.163078
+   "gen_s": 0.160796
   },
   {
    "kind": "edge",
@@ -1294,12 +1294,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.18630695343017578,
+   "wall": 0.19106388092041016,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.063442,
+   "prompt_s": 0.06311699999999999,
    "gen_tokens": 10,
-   "gen_s": 0.12037300000000001
+   "gen_s": 0.12520699999999998
   },
   {
    "kind": "edge",
@@ -1311,12 +1311,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21338987350463867,
+   "wall": 0.21594786643981934,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.062702,
+   "prompt_s": 0.062284,
    "gen_tokens": 12,
-   "gen_s": 0.14799500000000002
+   "gen_s": 0.150779
   },
   {
    "kind": "edge",
@@ -1328,12 +1328,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.24941492080688477,
+   "wall": 0.224229097366333,
    "load": 0,
    "prompt_tokens": 26,
-   "prompt_s": 0.079669,
+   "prompt_s": 0.06336699999999999,
    "gen_tokens": 13,
-   "gen_s": 0.166746
+   "gen_s": 0.157935
   },
   {
    "kind": "edge",
@@ -1345,12 +1345,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.1461629867553711,
+   "wall": 0.1423029899597168,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046990000000000004,
+   "prompt_s": 0.044734,
    "gen_tokens": 8,
-   "gen_s": 0.096129
+   "gen_s": 0.094753
   },
   {
    "kind": "edge",
@@ -1364,12 +1364,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.16252994537353516,
+   "wall": 0.16283893585205078,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06401699999999999,
+   "prompt_s": 0.06335199999999999,
    "gen_tokens": 8,
-   "gen_s": 0.095954
+   "gen_s": 0.09670699999999999
   },
   {
    "kind": "edge",
@@ -1385,12 +1385,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.06271195411682129,
+   "wall": 0.061511993408203125,
    "load": 0,
    "prompt_tokens": 16,
-   "prompt_s": 0.044814,
+   "prompt_s": 0.043501,
    "gen_tokens": 2,
-   "gen_s": 0.015503
+   "gen_s": 0.015311
   },
   {
    "kind": "uk_ok",
@@ -1402,12 +1402,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.18734502792358398,
+   "wall": 0.20858407020568848,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.063462,
+   "prompt_s": 0.062982,
    "gen_tokens": 10,
-   "gen_s": 0.121534
+   "gen_s": 0.142976
   },
   {
    "kind": "uk_ok",
@@ -1419,12 +1419,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.19116973876953125,
+   "wall": 0.18730926513671875,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065374,
+   "prompt_s": 0.062346,
    "gen_tokens": 10,
-   "gen_s": 0.12266200000000001
+   "gen_s": 0.122284
   },
   {
    "kind": "uk_ok",
@@ -1436,12 +1436,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.21045994758605957,
+   "wall": 0.18944311141967773,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.08386,
+   "prompt_s": 0.0634,
    "gen_tokens": 10,
-   "gen_s": 0.12367600000000001
+   "gen_s": 0.123438
   },
   {
    "kind": "uk_ok",
@@ -1453,12 +1453,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.13234519958496094,
+   "wall": 0.13263702392578125,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046488999999999996,
+   "prompt_s": 0.045316,
    "gen_tokens": 7,
-   "gen_s": 0.08316899999999999
+   "gen_s": 0.08463
   },
   {
    "kind": "uk_ok",
@@ -1470,12 +1470,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2160189151763916,
+   "wall": 0.2129840850830078,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.063975,
+   "prompt_s": 0.062978,
    "gen_tokens": 12,
-   "gen_s": 0.149431
+   "gen_s": 0.14698
   },
   {
    "kind": "uk_ok",
@@ -1487,12 +1487,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.19176387786865234,
+   "wall": 0.1881558895111084,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065683,
+   "prompt_s": 0.062895,
    "gen_tokens": 10,
-   "gen_s": 0.12304999999999999
+   "gen_s": 0.122413
   },
   {
    "kind": "uk_ok",
@@ -1504,12 +1504,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.1907951831817627,
+   "wall": 0.19179129600524902,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065239,
+   "prompt_s": 0.063495,
    "gen_tokens": 10,
-   "gen_s": 0.12222799999999999
+   "gen_s": 0.125508
   },
   {
    "kind": "uk_ok",
@@ -1521,12 +1521,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.16701436042785645,
+   "wall": 0.14801311492919922,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.04568,
+   "prompt_s": 0.046244999999999994,
    "gen_tokens": 8,
-   "gen_s": 0.11873900000000001
+   "gen_s": 0.098642
   },
   {
    "kind": "uk_err",
@@ -1538,12 +1538,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13444209098815918,
+   "wall": 0.13450384140014648,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.047721,
+   "prompt_s": 0.046133,
    "gen_tokens": 7,
-   "gen_s": 0.08354600000000001
+   "gen_s": 0.085107
   },
   {
    "kind": "uk_err",
@@ -1555,12 +1555,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.1779630184173584,
+   "wall": 0.17430925369262695,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.065314,
+   "prompt_s": 0.064041,
    "gen_tokens": 9,
-   "gen_s": 0.109791
+   "gen_s": 0.107663
   },
   {
    "kind": "uk_err",
@@ -1572,12 +1572,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13329792022705078,
+   "wall": 0.13309812545776367,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.047263,
+   "prompt_s": 0.045389000000000006,
    "gen_tokens": 7,
-   "gen_s": 0.083005
+   "gen_s": 0.084841
   },
   {
    "kind": "uk_err",
@@ -1589,12 +1589,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13224315643310547,
+   "wall": 0.13264179229736328,
    "load": 0,
    "prompt_tokens": 20,
-   "prompt_s": 0.046838,
+   "prompt_s": 0.04524,
    "gen_tokens": 7,
-   "gen_s": 0.082423
+   "gen_s": 0.084788
   },
   {
    "kind": "uk_err",
@@ -1606,12 +1606,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.18918776512145996,
+   "wall": 0.1876840591430664,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.064087,
+   "prompt_s": 0.06271399999999999,
    "gen_tokens": 10,
-   "gen_s": 0.12244
+   "gen_s": 0.122202
   },
   {
    "kind": "uk_err",
@@ -1624,12 +1624,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.19989705085754395,
+   "wall": 0.19060778617858887,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.063704,
+   "prompt_s": 0.0627,
    "gen_tokens": 10,
-   "gen_s": 0.132865
+   "gen_s": 0.12520799999999999
   },
   {
    "kind": "chat",
@@ -1641,12 +1641,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.1992349624633789,
+   "wall": 0.1896970272064209,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.072893,
+   "prompt_s": 0.062994,
    "gen_tokens": 10,
-   "gen_s": 0.123271
+   "gen_s": 0.123396
   },
   {
    "kind": "chat",
@@ -1658,12 +1658,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.17626118659973145,
+   "wall": 0.17550325393676758,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06383899999999999,
+   "prompt_s": 0.062903,
    "gen_tokens": 9,
-   "gen_s": 0.10974500000000001
+   "gen_s": 0.109781
   },
   {
    "kind": "chat",
@@ -1675,12 +1675,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.0910642147064209,
+   "wall": 0.08705472946166992,
    "load": 0,
    "prompt_tokens": 18,
-   "prompt_s": 0.046068,
+   "prompt_s": 0.043757,
    "gen_tokens": 4,
-   "gen_s": 0.042168
+   "gen_s": 0.040706000000000006
   },
   {
    "kind": "chat",
@@ -1692,12 +1692,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.21448183059692383,
+   "wall": 0.21305274963378906,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.063778,
+   "prompt_s": 0.062291,
    "gen_tokens": 12,
-   "gen_s": 0.14797300000000002
+   "gen_s": 0.14817
   },
   {
    "kind": "chat",
@@ -1709,12 +1709,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.2148909568786621,
+   "wall": 0.2092761993408203,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.063467,
+   "prompt_s": 0.062381,
    "gen_tokens": 12,
-   "gen_s": 0.148567
+   "gen_s": 0.144256
   },
   {
    "kind": "chat",
@@ -1726,12 +1726,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.139617919921875,
+   "wall": 0.11439800262451172,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.046686,
+   "prompt_s": 0.044719,
    "gen_tokens": 6,
-   "gen_s": 0.089503
+   "gen_s": 0.06704900000000001
   },
   {
    "kind": "chat",
@@ -1743,12 +1743,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.19031405448913574,
+   "wall": 0.18735980987548828,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.064001,
+   "prompt_s": 0.062404,
    "gen_tokens": 10,
-   "gen_s": 0.123692
+   "gen_s": 0.122128
   },
   {
    "kind": "chat",
@@ -1760,12 +1760,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.20513081550598145,
+   "wall": 0.19864988327026367,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.06518399999999999,
+   "prompt_s": 0.063005,
    "gen_tokens": 11,
-   "gen_s": 0.136774
+   "gen_s": 0.13286
   },
   {
    "kind": "chat_err",
@@ -1777,12 +1777,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.13156414031982422,
+   "wall": 0.13163995742797852,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.045872,
+   "prompt_s": 0.044786,
    "gen_tokens": 7,
-   "gen_s": 0.082447
+   "gen_s": 0.084042
   },
   {
    "kind": "chat_err",
@@ -1794,12 +1794,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.19052791595458984,
+   "wall": 0.18898630142211914,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.065363,
+   "prompt_s": 0.06217,
    "gen_tokens": 10,
-   "gen_s": 0.122215
+   "gen_s": 0.124026
   },
   {
    "kind": "chat_err",
@@ -1811,12 +1811,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.13194584846496582,
+   "wall": 0.13103222846984863,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046115,
+   "prompt_s": 0.04444,
    "gen_tokens": 7,
-   "gen_s": 0.082907
+   "gen_s": 0.08395999999999999
   },
   {
    "kind": "chat_err",
@@ -1828,12 +1828,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.2125110626220703,
+   "wall": 0.1851341724395752,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.064194,
+   "prompt_s": 0.063283,
    "gen_tokens": 10,
-   "gen_s": 0.145149
+   "gen_s": 0.118758
   },
   {
    "kind": "chat_err",
@@ -1845,12 +1845,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.1652510166168213,
+   "wall": 0.16586923599243164,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.065062,
+   "prompt_s": 0.063898,
    "gen_tokens": 8,
-   "gen_s": 0.097005
+   "gen_s": 0.099228
   },
   {
    "kind": "chat_err",
@@ -1862,12 +1862,12 @@
    ],
    "exact": false,
    "unchanged": false,
-   "wall": 0.1635582447052002,
+   "wall": 0.16464805603027344,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.06456300000000001,
+   "prompt_s": 0.063187,
    "gen_tokens": 8,
-   "gen_s": 0.09628400000000001
+   "gen_s": 0.09889400000000001
   },
   {
    "kind": "level",
@@ -1890,12 +1890,12 @@
      "I definitely have the report."
     ]
    },
-   "wall": 0.13076210021972656,
+   "wall": 0.13365912437438965,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.045348,
+   "prompt_s": 0.046423,
    "gen_tokens": 7,
-   "gen_s": 0.083116
+   "gen_s": 0.08468899999999999
   },
   {
    "kind": "level",
@@ -1918,12 +1918,12 @@
      "He goes to the library every day."
     ]
    },
-   "wall": 0.17461514472961426,
+   "wall": 0.1766347885131836,
    "load": 0,
    "prompt_tokens": 23,
-   "prompt_s": 0.06260399999999999,
+   "prompt_s": 0.06322699999999999,
    "gen_tokens": 9,
-   "gen_s": 0.109523
+   "gen_s": 0.110746
   },
   {
    "kind": "level",
@@ -1948,12 +1948,12 @@
      "However we were late."
     ]
    },
-   "wall": 0.12863922119140625,
+   "wall": 0.1341991424560547,
    "load": 0,
    "prompt_tokens": 19,
-   "prompt_s": 0.044414999999999996,
+   "prompt_s": 0.044567,
    "gen_tokens": 7,
-   "gen_s": 0.08164199999999999
+   "gen_s": 0.08652800000000001
   },
   {
    "kind": "level",
@@ -1984,12 +1984,12 @@
      "Thanks for your help—I appreciate it."
     ]
    },
-   "wall": 0.2085099220275879,
+   "wall": 0.19132399559020996,
    "load": 0,
    "prompt_tokens": 22,
-   "prompt_s": 0.063005,
+   "prompt_s": 0.06393399999999999,
    "gen_tokens": 10,
-   "gen_s": 0.14290799999999998
+   "gen_s": 0.12263800000000001
   },
   {
    "kind": "level",
@@ -2012,12 +2012,12 @@
      "Let's meet tomorrow at the office."
     ]
    },
-   "wall": 0.1899106502532959,
+   "wall": 0.1915740966796875,
    "load": 0,
    "prompt_tokens": 25,
-   "prompt_s": 0.063101,
+   "prompt_s": 0.063194,
    "gen_tokens": 10,
-   "gen_s": 0.12417600000000001
+   "gen_s": 0.125634
   },
   {
    "kind": "level",
@@ -2040,12 +2040,12 @@
      "She doesn't like the new design."
     ]
    },
-   "wall": 0.17272424697875977,
+   "wall": 0.17105388641357422,
    "load": 0,
    "prompt_tokens": 21,
-   "prompt_s": 0.046381,
+   "prompt_s": 0.044893,
    "gen_tokens": 10,
-   "gen_s": 0.123314
+   "gen_s": 0.123182
   },
   {
    "kind": "level",
@@ -2068,12 +2068,12 @@
      "It's been a long week, hasn't it?"
     ]
    },
-   "wall": 0.24477291107177734,
+   "wall": 0.23672199249267578,
    "load": 0,
    "prompt_tokens": 24,
-   "prompt_s": 0.064401,
+   "prompt_s": 0.063106,
    "gen_tokens": 14,
-   "gen_s": 0.17763900000000002
+   "gen_s": 0.17091900000000002
   },
   {
    "kind": "protect",
@@ -2086,12 +2086,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.2971761226654053,
+   "wall": 0.30251598358154297,
    "load": 0,
    "prompt_tokens": 32,
-   "prompt_s": 0.06395300000000001,
+   "prompt_s": 0.064974,
    "gen_tokens": 18,
-   "gen_s": 0.23036099999999998
+   "gen_s": 0.234724
   },
   {
    "kind": "protect",
@@ -2103,12 +2103,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.2834970951080322,
+   "wall": 0.2528188228607178,
    "load": 0,
    "prompt_tokens": 28,
-   "prompt_s": 0.064775,
+   "prompt_s": 0.063737,
    "gen_tokens": 15,
-   "gen_s": 0.215661
+   "gen_s": 0.185982
   },
   {
    "kind": "protect",
@@ -2122,12 +2122,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.3014810085296631,
+   "wall": 0.2937657833099365,
    "load": 0,
    "prompt_tokens": 31,
-   "prompt_s": 0.065576,
+   "prompt_s": 0.06476900000000001,
    "gen_tokens": 18,
-   "gen_s": 0.232826
+   "gen_s": 0.225978
   },
   {
    "kind": "protect",
@@ -2139,12 +2139,12 @@
    ],
    "exact": true,
    "unchanged": false,
-   "wall": 0.24501609802246094,
+   "wall": 0.2374279499053955,
    "load": 0,
    "prompt_tokens": 27,
-   "prompt_s": 0.064004,
+   "prompt_s": 0.062041,
    "gen_tokens": 14,
-   "gen_s": 0.17829699999999998
+   "gen_s": 0.172595
   },
   {
    "kind": "protect",
@@ -2156,12 +2156,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.2473008632659912,
+   "wall": 0.24454092979431152,
    "load": 0,
    "prompt_tokens": 27,
-   "prompt_s": 0.064881,
+   "prompt_s": 0.06603400000000001,
    "gen_tokens": 14,
-   "gen_s": 0.179344
+   "gen_s": 0.175144
   },
   {
    "kind": "protect",
@@ -2173,12 +2173,12 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.3251199722290039,
+   "wall": 0.2961437702178955,
    "load": 0,
    "prompt_tokens": 31,
-   "prompt_s": 0.06599,
+   "prompt_s": 0.064956,
    "gen_tokens": 18,
-   "gen_s": 0.255518
+   "gen_s": 0.22841399999999998
   },
   {
    "kind": "protect",
@@ -2190,21 +2190,21 @@
    ],
    "exact": true,
    "unchanged": true,
-   "wall": 0.23503804206848145,
+   "wall": 0.22623181343078613,
    "load": 0,
    "prompt_tokens": 26,
-   "prompt_s": 0.06515699999999999,
+   "prompt_s": 0.063372,
    "gen_tokens": 13,
-   "gen_s": 0.166486
+   "gen_s": 0.159774
   }
  ],
  "paragraph": {
   "output": "Hi team, I wanted to give a quick update on the migration. We were able to move most of the services last week, but there are still a few issues with the payment service. The logs show timeouts when the database is under load. I think we should have tested this more carefully before. Let's discuss it on tomorrow's call, and please send me any information you have.",
-  "wall": 1.19004487991333,
+  "wall": 1.1621057987213135,
   "load": 0,
   "prompt_tokens": 92,
-  "prompt_s": 0.094503,
+  "prompt_s": 0.095231,
   "gen_tokens": 81,
-  "gen_s": 1.092253
+  "gen_s": 1.0632460000000001
  }
 }

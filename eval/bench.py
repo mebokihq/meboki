@@ -28,8 +28,9 @@ PROMPTS = {
 # while Settings › Writing › English variant is UK.
 PROMPTS["fewshot-uk"] = PROMPTS["fewshot"].replace(
     "\n\nExamples:\n",
-    " The writer uses British English: never change British spelling or usage to American "
-    "(colour, organise, centre, travelled, cancelled, grey, \"the team are\").\n\nExamples:\n")
+    " The writer uses British English: never change any British spelling or usage to American. "
+    "This covers every British form, not only these examples: colour, organise, centre, travelled, "
+    "cancelled, grey, \"the team are\".\n\nExamples:\n")
 WRAPPED = {"fewshot", "fewshot-uk"}
 
 
