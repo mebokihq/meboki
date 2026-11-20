@@ -143,7 +143,8 @@ private struct CategoryChips: View {
                                 .fixedSize()
                         }
                         .padding(.vertical, 5)
-                        .padding(.horizontal, 8)
+                        // 6, not 8: the row must fit the 480 pt group at the minimum window width.
+                        .padding(.horizontal, 6)
                         .background(Capsule().fill(on ? DS.controlOn : Color.clear)
                             .shadow(color: on ? DS.thumbShadow : .clear, radius: 1.5, y: 1))
                         .contentShape(Capsule())
