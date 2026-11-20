@@ -117,6 +117,7 @@ final class AppSettings: ObservableObject {
         static let logSnippets = "logSnippets"
         static let showInMenuBar = "showInMenuBar"
         static let lastSettingsPane = "lastSettingsPane"
+        static let settingsWindowSize = "settingsWindowSize"
         static let colorTone = "colorTone"
         static let modelSource = "modelSource"
         static let cloudProvider = "cloudProvider"
@@ -202,6 +203,23 @@ final class AppSettings: ObservableObject {
     /// The Settings pane shown last (`SettingsPane` raw value).
     @Published var lastSettingsPane: String {
         didSet { defaults.set(lastSettingsPane, forKey: Key.lastSettingsPane) }
+    }
+
+    /// The Settings window's size the user left it at (only the size: the window opens centered). Nil until
+    /// the window has been resized once, or when the stored value can't be read.
+    var settingsWindowSize: CGSize? {
+        get {
+            guard let a = defaults.array(forKey: Key.settingsWindowSize) as? [Double], a.count == 2,
+                  a[0].isFinite, a[1].isFinite, a[0] > 0, a[1] > 0 else { return nil }
+            return CGSize(width: a[0], height: a[1])
+        }
+        set {
+            if let s = newValue {
+                defaults.set([Double(s.width), Double(s.height)], forKey: Key.settingsWindowSize)
+            } else {
+                defaults.removeObject(forKey: Key.settingsWindowSize)
+            }
+        }
     }
 
     /// Settings › Appearance: how vivid the brand and category colors are (`ColorTone`). Default `.muted`.

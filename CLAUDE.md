@@ -92,7 +92,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Licence/LicenceDemo.swift     DEBUG demos: `LicenceDemo` (own manager forced into a state), `TrialEndedDemo`, `PopoverDemo`, `DemoSnapshot`
   Settings/APIKeyStore.swift    BYOK API keys in the login Keychain (one item per provider)
   Settings/Shortcut.swift       recorded global shortcut (key code, Carbon modifiers, glyphs), macOS-shortcut conflict check
-  Settings/SettingsWindow.swift Settings window (800 × 580, traffic lights in the glass sidebar, search, toast), SettingsModel, recorder key monitor
+  Settings/SettingsWindow.swift Settings window (800 × 580 default, resizable to min 800 × 500, size remembered in `settingsWindowSize`; traffic lights in the glass sidebar, search, toast), SettingsModel, recorder key monitor
   Settings/SettingsComponents.swift  group, row, key field, footnote, app icon
   Settings/Panes/*.swift        General (style picker art, hotkey field), Appearance (tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts, Privacy, Licence (status card, buy, key field, remove), About
   Settings/LicenceLock.swift    free-mode lock marks: `LicenceGate` (environment), `.licenceLocked(_:caption:)`, `NeedsLicencePopover`, `FreeModeBanner`; `DSSegmented(locked:onLockedTap:)`

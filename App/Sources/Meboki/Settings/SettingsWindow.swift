@@ -197,6 +197,9 @@ struct SettingsRootView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: ModelStore
 
+    /// The widest a pane's rows get (§8: the content area is 560 at the default 800 width).
+    static let maxPaneWidth: CGFloat = 708
+
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(model: model)
@@ -208,7 +211,8 @@ struct SettingsRootView: View {
         // A new color tone redraws the whole window, so every brand and category color picks it up at once.
         .id(settings.colorTone)
         .padding(8)
-        .frame(width: 800, height: 580)
+        .frame(minWidth: SettingsWindowController.minSize.width, maxWidth: .infinity,
+               minHeight: SettingsWindowController.minSize.height, maxHeight: .infinity)
         .background(DS.window)
         .overlay(alignment: .bottom) {
             if let t = model.toast {
@@ -240,7 +244,10 @@ struct SettingsRootView: View {
                     .padding(EdgeInsets(top: 20, leading: 26, bottom: 16, trailing: 26))
                     .accessibilityAddTraits(.isHeader)
                 ScrollView {
+                    // Rows stop growing at `maxPaneWidth` in a wide window; the scroll view (and its
+                    // scroller) still spans the whole content area.
                     pane
+                        .frame(maxWidth: Self.maxPaneWidth, alignment: .leading)
                         .padding(EdgeInsets(top: 0, leading: 26, bottom: 24, trailing: 26))
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -354,8 +361,9 @@ private struct SidebarItem: View {
 
 // MARK: - Window
 
-/// The Settings window (§8): 800 × 580, full-size content, transparent title bar, the traffic lights moved
-/// into the floating sidebar. Opening it activates Meboki (as Settings windows do); closing it gives the
+/// The Settings window (§8): 800 × 580 by default, resizable down to 800 × 500, the size remembered
+/// (`AppSettings.settingsWindowSize`; it always opens centered), full-size content, transparent title bar,
+/// the traffic lights moved into the floating sidebar. Opening it activates Meboki (as Settings windows do); closing it gives the
 /// keyboard back to the app the user was in. While it is key, a small main menu gives it ⌘, ⌘W ⌘Q and the
 /// Edit keys; the menu is removed again so the popups' keys stay untouched.
 @MainActor
@@ -407,9 +415,30 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func close() { window?.performClose(nil) }
 
+    static let defaultSize = NSSize(width: 800, height: 580)
+    static let minSize = NSSize(width: 800, height: 500)
+
+    /// The size to open at: the remembered one, at least `minSize`, and no bigger than the screen's visible
+    /// area (a size saved on a larger display).
+    private func openingSize(on screen: NSScreen?) -> NSSize {
+        var s = settings.settingsWindowSize ?? Self.defaultSize
+        s.width = max(s.width, Self.minSize.width)
+        s.height = max(s.height, Self.minSize.height)
+        if let visible = (screen ?? NSScreen.main)?.visibleFrame.size {
+            s.width = min(s.width, max(visible.width, Self.minSize.width))
+            s.height = min(s.height, max(visible.height, Self.minSize.height))
+        }
+        return s
+    }
+
+    private func saveSize() {
+        guard let w = window else { return }
+        settings.settingsWindowSize = w.frame.size
+    }
+
     private func makeWindow() -> NSWindow {
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 580),
-                         styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+        let w = NSWindow(contentRect: NSRect(origin: .zero, size: Self.defaultSize),
+                         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                          backing: .buffered, defer: false)
         w.title = "Meboki Settings"
         w.titleVisibility = .hidden
@@ -422,10 +451,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         w.delegate = self
         let host = NSHostingView(rootView: SettingsRootView(model: model, settings: settings, store: store))
         // The window keeps the size set below; the hosting view must not resize it to content + title bar.
+        // With `[]` it also resets the window's min size to zero on its first update (and `.minSize` would add
+        // the title bar to it), so `windowWillResize` holds the minimum instead.
         host.sizingOptions = []
         w.contentView = host
-        // With a full-size content view the frame is the whole window: 800 × 580 (§8), not 580 + title bar.
-        w.setFrame(NSRect(origin: w.frame.origin, size: NSSize(width: 800, height: 580)), display: false)
+        // With a full-size content view the frame is the whole window (800 × 580 by default, §8), not
+        // content + title bar; so the content min size is the frame min size too.
+        w.contentMinSize = Self.minSize
+        w.minSize = Self.minSize
+        w.setFrame(NSRect(origin: w.frame.origin, size: openingSize(on: w.screen)), display: false)
         return w
     }
 
@@ -466,9 +500,20 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func windowDidResize(_ notification: Notification) { layoutTrafficLights() }
 
+    /// Never smaller than `minSize`, whatever the window's own min size says at the moment.
+    func windowWillResize(_ sender: NSWindow, to frameSize: NSSize) -> NSSize {
+        NSSize(width: max(frameSize.width, Self.minSize.width), height: max(frameSize.height, Self.minSize.height))
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        layoutTrafficLights()
+        saveSize()
+    }
+
     func windowDidChangeScreen(_ notification: Notification) { layoutTrafficLights() }
 
     func windowWillClose(_ notification: Notification) {
+        saveSize()
         model.recording = false
         model.search = ""
         if NSApp.mainMenu === mainMenu { NSApp.mainMenu = nil }

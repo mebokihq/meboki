@@ -22,6 +22,13 @@ struct GeneralPane: View {
                 }
             }
 
+            SettingsGroupHeader("Shortcut")
+            SettingsGroup {
+                SettingsRow("Check text", subtitle: "Proofreads the focused field, or the selection if there is one") {
+                    HotkeyField(model: model, shortcut: settings.hotkey)
+                }
+            }
+
             SettingsGroupHeader("App")
             SettingsGroup {
                 SettingsRow("Launch at login") {
@@ -43,13 +50,6 @@ struct GeneralPane: View {
                             subtitle: "Checks the text area you type in when you pause, no shortcut needed, and keeps the underlines up to date. Models on this Mac only, not cloud") {
                     SettingsSwitch(isOn: $settings.underlineAsYouType, label: "Underline mistakes as I type")
                         .licenceLocked(.automaticCheck)
-                }
-            }
-
-            SettingsGroupHeader("Shortcut")
-            SettingsGroup {
-                SettingsRow("Check text", subtitle: "Proofreads the focused field, or the selection if there is one") {
-                    HotkeyField(model: model, shortcut: settings.hotkey)
                 }
             }
 

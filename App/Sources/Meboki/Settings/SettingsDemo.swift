@@ -23,6 +23,11 @@ enum SettingsDemo {
             let name = CommandLine.arguments[i + 1]
             settings.colorTone = ColorTone(rawValue: name == "vivid" ? "current" : name) ?? .muted
         }
+        // `--size 800x500`: open at that window size (still clamped to the minimum and the screen).
+        if let i = CommandLine.arguments.firstIndex(of: "--size"), i + 1 < CommandLine.arguments.count {
+            let parts = CommandLine.arguments[i + 1].split(separator: "x").compactMap { Double($0) }
+            if parts.count == 2 { settings.settingsWindowSize = CGSize(width: parts[0], height: parts[1]) }
+        }
         settings.checkedApps = ["com.apple.Safari": "Safari", "com.google.Chrome": "Google Chrome",
                                 "com.apple.Notes": "Notes", "com.tinyspeck.slackmacgap": "Slack",
                                 "com.apple.MobileSMS": "Messages", "com.apple.Terminal": "Terminal",
