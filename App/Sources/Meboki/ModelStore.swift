@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import MebokiCore
 
 struct ModelInfo: Equatable {
     let id: String
@@ -101,6 +102,14 @@ enum Catalog {
     static var ramGB: Int { Int(ProcessInfo.processInfo.physicalMemory / 1_073_741_824) }
 
     static var recommended: ModelInfo { ramGB >= 16 ? gemma4E4B : gemma4E2B }
+
+    /// Apple's built-in model is the default on a fresh install where it can answer (`ModelBackend.freshInstallSource`)
+    /// and wears the "Recommended" pill instead of Gemma. NOT through the eval gate yet: the benchmark on macOS 26
+    /// is pending (PLAN.md §3). Set to false if it fails the gate; it then stays a choice and Gemma the default.
+    static let appleIsDefault = true
+
+    /// Apple's model is the recommended choice on this Mac now.
+    static func appleRecommended(_ a: AppleModelAvailability) -> Bool { appleIsDefault && a.isAvailable }
 
     static func byID(_ id: String?) -> ModelInfo? { all.first { $0.id == id } }
 }

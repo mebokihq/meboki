@@ -67,13 +67,16 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Flow/ToastPanel.swift         glass toasts (done line, messages), auto-hide, Esc / click outside
   Flow/KeyGuard.swift           event tap (own thread) that holds ⏎ ⇥ arrows Esc while fixes are written; Esc stops Apply all
   Design/                       tokens, glass, shared components, DEBUG gallery
-  ModelStore.swift              Catalog (pinned HF URLs + SHA256) and downloader (resume, checksum)
+  ModelStore.swift              Catalog (pinned HF URLs + SHA256, `appleIsDefault`) and downloader (resume, checksum)
+  AppleIntelligence.swift       Apple's built-in model in the app: availability (+ DEBUG override), corrector, System Settings link, status texts
   ServerManager.swift           bundled llama-server child process (127.0.0.1, random port, /health)
   HotKey.swift                  Carbon RegisterEventHotKey
   LegacyMigration.swift         one-time move of settings (dev.local.meboki, dev.local.proofreader) and of models, logs from pre-rename builds
 Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   Prompt.swift                  the benchmarked few-shot system prompt
   LLMClient.swift               `Corrector` protocol; OpenAI-compatible chat client for llama-server; detects truncated replies
+  AppleModel.swift              Apple's on-device model (macOS 26+, weak-linked `FoundationModels`): `AppleModelAvailability`, `AppleModelError` (fatal or skip), `AppleModelClient`, output cap and truncation rule
+  ModelBackend.swift            `ModelSource` (local / apple / cloud), `ModelBackend.choose` (which backend a check uses, or why none), `freshInstallSource` (Apple's model as the fresh-install default)
   ResponsesClient.swift         BYOK cloud: OpenAI Responses API with SSE streaming (OpenAI, OpenRouter), store off, ZDR on OpenRouter
   CloudCatalog.swift            CloudProvider (base URL, key shape) and the cloud models (reasoning/temperature settings, benchmark)
   PostFilter.swift              clean wrappers, similarity guard (Ratcliff/Obershelp = difflib), style-only filter

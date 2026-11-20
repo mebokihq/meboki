@@ -36,7 +36,7 @@ struct OnboardingRootView: View {
 
     @ViewBuilder private var page: some View {
         switch model.step {
-        case .welcome: WelcomePage()
+        case .welcome: WelcomePage(appleModel: model.appleModel)
         case .access: AccessPage(model: model)
         case .model: ModelPage(model: model, store: store)
         case .tryIt: TryPage(model: model, settings: settings)
@@ -99,9 +99,11 @@ struct OnboardingRootView: View {
         }
     }
 
-    /// A model is in use, downloading or being checked, or checks go to the cloud.
+    /// A model is in use, downloading or being checked, or checks go to the cloud or to Apple's model (while it
+    /// answers).
     private var modelChosen: Bool {
         if model.cloudModelName != nil { return true }
+        if model.usingApple { return model.appleModel.isAvailable }
         guard let m = Catalog.byID(model.selectedModelID) else { return false }
         _ = store.installedVersion
         if store.isInstalled(m) { return true }
@@ -222,6 +224,8 @@ private struct StatusLine: View {
 // MARK: - 1. Welcome
 
 private struct WelcomePage: View {
+    let appleModel: AppleModelAvailability
+
     var body: some View {
         VStack(spacing: 0) {
             AppIconView(size: 84)
@@ -243,7 +247,9 @@ private struct WelcomePage: View {
                 feature("keyboard", 0xFF375F, "One shortcut",
                         "Press \(AppSettings.shared.hotkey.display) to check the field you're typing in, or just the selected text.")
                 feature("lock.shield", 0x30B850, "Private by design",
-                        "An open model checks your text on this Mac. No account, no tracking.")
+                        appleModel.isAvailable
+                            ? "Apple Intelligence or an open model checks your text on this Mac. No account, no tracking."
+                            : "An open model checks your text on this Mac. No account, no tracking.")
             }
             .frame(maxWidth: 440, alignment: .leading)
             .padding(.top, 34)
@@ -406,6 +412,10 @@ private struct ModelPage: View {
     @ObservedObject var store: ModelStore
 
     private var picked: ModelInfo { Catalog.byID(model.pickedModelID) ?? Catalog.recommended }
+    /// Apple's card is picked (it is not a `Catalog` model).
+    private var pickedApple: Bool { model.pickedModelID == AppleIntelligence.id }
+    /// macOS 26+: Apple's card is shown (pickable only while available). macOS 14–15: the page is as before.
+    private var showsApple: Bool { model.appleModel != .osTooOld }
     /// The two defaults, plus the model in use when it's another one (Welcome Guide reopened later).
     private var models: [ModelInfo] {
         var list = Catalog.onboarding
@@ -415,13 +425,26 @@ private struct ModelPage: View {
 
     var body: some View {
         PageBody {
-            PageHeader(symbol: "cpu", color: 0xAF52DE, title: "Download the writing model",
-                       subtitle: "Meboki checks your text with an open model that runs on this Mac. It downloads once; after that, checks work offline.")
+            PageHeader(symbol: "cpu", color: 0xAF52DE, title: "Choose the writing model",
+                       subtitle: showsApple
+                           ? "Apple Intelligence is built into macOS and works right away. Or download an open model that runs on this Mac; after that, checks work offline."
+                           : "Meboki checks your text with an open model that runs on this Mac. It downloads once; after that, checks work offline.")
             VStack(spacing: 10) {
+                if showsApple {
+                    AppleCard(availability: model.appleModel, picked: pickedApple,
+                              inUse: model.usingApple && model.cloudModelName == nil,
+                              recommended: Catalog.appleRecommended(model.appleModel),
+                              openSettings: model.actions.openAppleSettings) {
+                        // Picking it is the whole step: no download, Try it works at once.
+                        model.pickedModelID = AppleIntelligence.id
+                        model.actions.useApple()
+                    }
+                }
                 ForEach(models, id: \.id) { m in
                     ModelCard(info: m, picked: m.id == model.pickedModelID,
-                              inUse: model.cloudModelName == nil && m.id == model.selectedModelID,
-                              installed: installed(m)) {
+                              inUse: model.cloudModelName == nil && !model.usingApple && m.id == model.selectedModelID,
+                              installed: installed(m),
+                              recommended: m == Catalog.recommended && !Catalog.appleRecommended(model.appleModel)) {
                         model.pickedModelID = m.id
                     }
                 }
@@ -451,6 +474,23 @@ private struct ModelPage: View {
 
     /// The button and status for the picked model.
     @ViewBuilder private var actionRow: some View {
+        if pickedApple {
+            HStack(spacing: 12) {
+                if model.usingApple, model.appleModel.isAvailable {
+                    StatusLine(kind: .ok, text: "\(AppleModel.displayName) is ready · no download")
+                } else if model.appleModel.isAvailable {
+                    Button("Use \(AppleModel.displayName)") { model.actions.useApple() }.buttonStyle(.dsPrimary)
+                } else {
+                    StatusLine(kind: .warning, text: AppleModel.unavailableMessage(model.appleModel))
+                }
+            }
+            .frame(minHeight: 34)
+        } else {
+            localActionRow
+        }
+    }
+
+    @ViewBuilder private var localActionRow: some View {
         let m = picked
         HStack(spacing: 12) {
             switch store.state(m) {
@@ -468,11 +508,13 @@ private struct ModelPage: View {
                 Button("Try Again") { model.actions.useModel(m) }.buttonStyle(.dsPrimary)
             case nil:
                 if installed(m) {
-                    if model.cloudModelName == nil, m.id == model.selectedModelID {
+                    if model.cloudModelName == nil, !model.usingApple, m.id == model.selectedModelID {
                         StatusLine(kind: .ok, text: readyText(m))
                     } else {
                         if let cloud = model.cloudModelName {
                             StatusLine(kind: .plain, text: "Checks use \(cloud) (cloud) now.")
+                        } else if model.usingApple {
+                            StatusLine(kind: .plain, text: "Checks use \(AppleModel.displayName) now.")
                         }
                         Button("Use \(m.shortName)") { model.actions.useModel(m) }.buttonStyle(.dsPrimary)
                     }
@@ -538,6 +580,7 @@ private struct ModelCard: View {
     let picked: Bool
     let inUse: Bool
     let installed: Bool
+    let recommended: Bool
     let action: () -> Void
     @State private var hovering = false
 
@@ -551,7 +594,7 @@ private struct ModelCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(info.shortName).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
-                        if info == Catalog.recommended { Pill("Recommended for this Mac", kind: .brand) }
+                        if recommended { Pill("Recommended for this Mac", kind: .brand) }
                         if inUse && installed { Pill("In use", kind: .success) } else if installed { Pill("Downloaded") }
                     }
                     Text(detail)
@@ -573,7 +616,7 @@ private struct ModelCard: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .accessibilityLabel(info.shortName + (info == Catalog.recommended ? ", recommended" : ""))
+        .accessibilityLabel(info.shortName + (recommended ? ", recommended" : ""))
         .accessibilityValue(detail)
         .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
     }
@@ -583,6 +626,70 @@ private struct ModelCard: View {
             + String(format: "%.1f s per paragraph · uses %g GB of memory", info.paragraphSeconds,
                      (info.peakMemoryGB * 10).rounded() / 10)
             + " · for Macs with \(info.recommendedMinRAMGB) GB+"
+    }
+}
+
+/// Apple's built-in model on the model page (macOS 26+): on top, "Ready now · no download". Can be picked only
+/// while available; with Apple Intelligence off it says how to turn it on.
+private struct AppleCard: View {
+    let availability: AppleModelAvailability
+    let picked: Bool
+    let inUse: Bool
+    let recommended: Bool
+    let openSettings: () -> Void
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: DS.Radius.group, style: .continuous)
+        let enabled = availability.isAvailable
+        Button(action: action) {
+            HStack(spacing: 14) {
+                RadioDot(isOn: picked && enabled).opacity(enabled ? 1 : 0.35)
+                ModelGlyph(modelID: AppleIntelligence.id, initial: "A", size: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .opacity(enabled ? 1 : 0.5)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(AppleModel.displayName).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
+                        if recommended { Pill("Recommended for this Mac", kind: .brand) }
+                        if inUse && enabled { Pill("In use", kind: .success) }
+                    }
+                    Text(detail)
+                        .font(DS.Font.caption)
+                        .foregroundStyle(enabled ? DS.textSecondary : DS.catPunctuation)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if availability == .notEnabled {
+                        Button("Open System Settings", action: openSettings).buttonStyle(.dsLink).padding(.leading, -6)
+                    }
+                }
+                Spacer(minLength: 0)
+                Text(enabled ? "Ready now" : "")
+                    .font(DS.Font.small)
+                    .foregroundStyle(DS.ok)
+            }
+            .padding(.vertical, 11)
+            .padding(.horizontal, 14)
+            .background(shape.fill(hovering && !picked && enabled ? DS.hover : DS.group))
+            .overlay(shape.strokeBorder(picked && enabled ? DS.brand : DS.separator, lineWidth: picked && enabled ? 2 : 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { hovering = $0 }
+        .accessibilityLabel(AppleModel.displayName + (recommended ? ", recommended" : ""))
+        .accessibilityValue(detail)
+        .accessibilityAddTraits(picked && enabled ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var detail: String {
+        switch availability {
+        case .available: "Built into macOS · ready now · no download"
+        case .notEnabled: "Turn on Apple Intelligence in System Settings to use it here, with no download."
+        case .modelNotReady: "macOS is still preparing the model. It can be picked once it's ready."
+        case .deviceNotEligible: "Not supported on this Mac."
+        case .osTooOld: "Needs macOS 26."
+        }
     }
 }
 
@@ -660,6 +767,11 @@ private struct TryPage: View {
             }
         case .failed(let msg):
             StatusLine(kind: .warning, text: "The model didn't start: \(msg)")
+        case .unavailable(let msg):
+            HStack(spacing: 8) {
+                StatusLine(kind: .warning, text: msg)
+                Button("Choose another") { model.go(.model) }.buttonStyle(.dsLinkStrong)
+            }
         }
     }
 
@@ -902,7 +1014,7 @@ private struct DonePage: View {
             Box(padding: 0) {
                 VStack(spacing: 0) {
                     SettingsRow("Underline mistakes as I type",
-                                subtitle: "Checks text areas after you pause typing (local model)") {
+                                subtitle: "Checks text areas after you pause typing (models on this Mac)") {
                         SettingsSwitch(isOn: $settings.underlineAsYouType, label: "Underline mistakes as I type")
                             .licenceLocked(.automaticCheck)
                     }
@@ -961,8 +1073,15 @@ private struct DonePage: View {
             }))
         }
         switch model.engine {
+        case .unavailable(let msg):
+            rows.append(AnyView(SettingsRow("\(AppleModel.displayName) can't check yet", subtitle: msg) {
+                Button("Choose…") { model.go(.model) }.buttonStyle(.ds(.primary, small: true))
+            }))
         case .needsModel, .failed:
-            rows.append(AnyView(SettingsRow("No model yet", subtitle: "Checks need a downloaded model or a cloud key") {
+            rows.append(AnyView(SettingsRow("No model yet",
+                                            subtitle: model.appleModel == .osTooOld
+                                                ? "Checks need a downloaded model or a cloud key"
+                                                : "Checks need Apple Intelligence, a downloaded model or a cloud key") {
                 Button("Choose…") { model.go(.model) }.buttonStyle(.ds(.primary, small: true))
             }))
         default:

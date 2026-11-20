@@ -35,6 +35,8 @@ final class PopoverModel: ObservableObject {
     /// Cloud mode: the provider's name ("OpenRouter") and the model line under the name. Nil on this Mac.
     @Published var cloudProvider: String?
     @Published var cloudDetail = ""
+    /// Apple's built-in model is in use: no memory meter (it lives in a system process), "Built into macOS".
+    @Published var builtIn = false
     /// The app checks run in (the frontmost app, or the last one before Meboki). Nil when unknown.
     @Published var appName: String?
     @Published var appBundleID: String?
@@ -288,7 +290,13 @@ struct PopoverView: View {
                 ModelGlyph(modelID: model.modelID, initial: String(model.modelName.prefix(1)), size: 26)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(model.modelName).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
-                    if model.cloudProvider != nil {
+                    if model.builtIn {
+                        Text("Built into macOS · no download")
+                            .font(DS.Font.footnote)
+                            .foregroundStyle(DS.textSecondary)
+                            .lineLimit(1)
+                            .padding(.top, 2)
+                    } else if model.cloudProvider != nil {
                         Text(model.cloudDetail)
                             .font(DS.Font.footnote)
                             .foregroundStyle(DS.textSecondary)

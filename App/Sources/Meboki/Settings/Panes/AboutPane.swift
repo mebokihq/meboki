@@ -67,6 +67,7 @@ struct AboutPane: View {
             license("llama.cpp (llama-server)", "MIT License · github.com/ggml-org/llama.cpp")
             license("Sparkle (updates)", "MIT License · github.com/sparkle-project/Sparkle")
             license("Gemma 4 and Qwen3.5 model files", "Apache-2.0 · Google, Alibaba Cloud (Qwen)")
+            license("Apple Intelligence (optional)", "Apple's on-device model, part of macOS 26. Not included in Meboki")
             license("Llama 3.1 8B model file (optional)",
                     "Built with Llama. Llama 3.1 is licensed under the Llama 3.1 Community License, "
                         + "Copyright © Meta Platforms, Inc. All Rights Reserved.")

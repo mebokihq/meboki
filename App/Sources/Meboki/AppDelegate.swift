@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var settingsWindow: SettingsWindowController = {
         let model = SettingsModel(pane: SettingsPane(rawValue: settings.lastSettingsPane) ?? .general,
                                   selectedModelID: selectedModel.id)
+        model.appleModel = appleModel
+        settingsWindowMade = true
         model.actions = SettingsActions(
             useModel: { [weak self] m in self?.selectModel(m) },
             download: { [weak self] m in self?.confirmLicense(m) { self?.store.download(m) } },
@@ -43,6 +45,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             removeKey: { [weak self] p in self?.removeKey(p) },
             testCloud: { [weak self] p in self?.testCloud(p) },
             useCloud: { [weak self] in self?.useCloud() },
+            useApple: { [weak self] in self?.useApple() },
+            openAppleSettings: { AppleIntelligence.openSettings() },
             showWelcome: { [weak self] in self?.showOnboarding() },
             showUpdate: { [weak self] in self?.updates.showUpdate() })
         let c = SettingsWindowController(model: model, settings: settings, store: store)
@@ -53,6 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         return c
     }()
+    /// `settingsWindow` exists (it is lazy): availability changes reach its model only then.
+    private var settingsWindowMade = false
     /// The onboarding window (first launch, or right-click menu › Welcome Guide…).
     private var onboarding: OnboardingWindowController?
     /// Polls the Accessibility permission while it's off (`watchTrust`).
@@ -192,8 +198,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var cloudKeys: Set<CloudProvider> = []
     /// Checks go to the cloud model with the user's key (Settings › Models › Cloud › Use); `llama-server` is stopped.
     private var usingCloud: Bool { settings.modelSource == .cloud }
+    /// Checks go to Apple's built-in model (macOS 26+); `llama-server` is stopped. On this Mac, like local.
+    private var usingApple: Bool { settings.modelSource == .apple }
+    /// Checks go to the downloaded model through `llama-server`.
+    private var usingLocal: Bool { settings.modelSource == .local }
+    /// Apple's built-in model on this Mac, refreshed by `watchAppleModel` and before each check.
+    private var appleModel = AppleIntelligence.current()
+    private var appleTimer: Timer?
     /// The model checks use, for status lines and the island ("Gemma 4 E4B", "Claude Haiku 5.5").
-    private var activeModelName: String { usingCloud ? settings.cloudModel.name : selectedModel.name }
+    private var activeModelName: String {
+        switch settings.modelSource {
+        case .cloud: settings.cloudModel.name
+        case .apple: AppleModel.displayName
+        case .local: selectedModel.name
+        }
+    }
+
+    /// What a check runs on (PLAN.md §3 "Apple Intelligence"): one factory for the hotkey check, Try it, the
+    /// automatic check and the server coming up, instead of a client built in each.
+    private struct CheckBackend {
+        let corrector: any Corrector
+        /// Pipeline cache key: a different model starts with an empty sentence cache.
+        let key: String
+        /// Requests in flight at once; nil keeps the pipeline's one (cloud: rate limits).
+        let lanes: Int?
+        /// The provider when the text leaves the Mac (the card shows a cloud instead of the lock).
+        let cloudProvider: CloudProvider?
+    }
+
+    /// The source's backend, from what this Mac has now. Never switches source by itself.
+    private var backendChoice: ModelBackend {
+        ModelBackend.choose(source: settings.modelSource, apple: appleModel, localInstalled: store.isInstalled(selectedModel),
+                            cloudKey: cloudKeys.contains(settings.cloudModel.provider))
+    }
+
+    /// The backend checks use now, or nil when it can't answer yet: the local model is loading, unloaded or not
+    /// downloaded, the cloud key is missing, or Apple's model is unavailable (`showModelNotReady` says which).
+    private func checkBackend() -> CheckBackend? {
+        switch backendChoice {
+        case .cloud:
+            let m = settings.cloudModel
+            guard let key = APIKeyStore.key(for: m.provider) else { return nil }
+            return CheckBackend(corrector: ResponsesClient(model: m, apiKey: key), key: "cloud:\(m.provider.rawValue):\(m.id)",
+                                lanes: nil, cloudProvider: m.provider)
+        case .apple:
+            guard let c = AppleIntelligence.corrector() else { return nil }
+            return CheckBackend(corrector: c, key: AppleModel.cacheKey, lanes: AppleModel.requestLanes, cloudProvider: nil)
+        case .local:
+            guard case .ready(let base) = server.state else { return nil }
+            return CheckBackend(corrector: LLMClient(baseURL: base), key: "local:\(selectedModel.id)",
+                                lanes: ServerManager.slots, cloudProvider: nil)
+        case .unusable:
+            return nil
+        }
+    }
+
+    /// Asks the system again (Apple Intelligence turned on or off, the model finished preparing).
+    private func refreshAppleModel() {
+        let now = AppleIntelligence.current()
+        guard now != appleModel else { return }
+        Log.write("apple model: \(appleModel.rawValue) → \(now.rawValue)")
+        appleModel = now
+        if settingsWindowMade { settingsWindow.model.appleModel = now }
+        refreshStatus()
+        if usingApple, now.isAvailable { resumeAutoCheck() }
+    }
+
+    /// macOS 26+: follows the availability every 5 s, so turning Apple Intelligence on in System Settings shows at
+    /// once in the menu, Settings and onboarding. Nothing to follow on older macOS.
+    private func watchAppleModel() {
+        guard AppleIntelligence.canRun, appleTimer == nil else { return }
+        appleTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshAppleModel() }
+        }
+    }
 
     // MARK: Lifecycle
 
@@ -293,9 +371,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !firstRun, !AX.isTrusted(prompt: false) { _ = AX.isTrusted(prompt: true) }
         watchTrust()
         cloudKeys = Set(CloudProvider.allCases.filter(APIKeyStore.hasKey))
-        // Cloud mode needs no local model: llama-server stays stopped (no RAM, no download). A model that isn't
-        // downloaded waits for the user (onboarding, or Settings › Models): launch never starts a download.
-        if !usingCloud, store.isInstalled(selectedModel) { ensureModelAndStart() }
+        // A fresh install on a Mac where Apple's model answers starts with it: checks work with no download
+        // (PLAN.md §3; `Catalog.appleIsDefault`). Anyone who already chose, or used the app before, keeps their model.
+        if let source = ModelBackend.freshInstallSource(
+            storedSource: settings.storedModelSource, storedModelID: UserDefaults.standard.string(forKey: "modelID"),
+            onboardingDone: settings.onboardingDone,
+            // Never from a DEBUG-forced state on a macOS that can't run the model.
+            apple: AppleIntelligence.canRun ? appleModel : .osTooOld, appleIsDefault: Catalog.appleIsDefault) {
+            settings.modelSource = source
+            Log.write("model: fresh install, \(source.rawValue) by default")
+        }
+        watchAppleModel()
+        // Cloud mode and Apple's model need no local model: llama-server stays stopped (no RAM, no download). A model
+        // that isn't downloaded waits for the user (onboarding, or Settings › Models): launch never starts a download.
+        if usingLocal, store.isInstalled(selectedModel) { ensureModelAndStart() }
 
         // Checking as you type (Milestone B step 3): the focused text area is checked after a typing pause.
         focusTracker.onFocus = { [weak self] el, pid in self?.autoFocusChanged(el, pid: pid) }
@@ -305,7 +394,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in self?.updateAutoCheck() }
             .store(in: &settingsObservers)
         settings.$modelSource.dropFirst().receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.updateAutoCheck() }
+            .sink { [weak self] _ in
+                self?.updateAutoCheck()
+                self?.refreshStatus()
+            }
             .store(in: &settingsObservers)
         updateAutoCheck()
         startUpdates()
@@ -700,7 +792,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         onboarding = c
         if !c.isVisible {
             c.model.step = .welcome
-            c.model.pickedModelID = selectedModel.id
+            c.model.pickedModelID = usingApple ? AppleIntelligence.id : selectedModel.id
             c.model.tryState = .idle
         }
         c.model.launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -722,6 +814,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             revealApp: { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) },
             useModel: { [weak self] m in self?.selectModel(m) },
+            useApple: { [weak self] in self?.useApple() },
+            openAppleSettings: { AppleIntelligence.openSettings() },
             pause: { [weak self] m in self?.store.pause(m) },
             openSettings: { [weak self] pane in self?.showSettings(pane: pane) },
             openLicence: { [weak self] in self?.showLicence() },
@@ -767,8 +861,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if m.selectedModelID != selectedModel.id { m.selectedModelID = selectedModel.id }
         let cloud: String? = usingCloud ? settings.cloudModel.name : nil
         if m.cloudModelName != cloud { m.cloudModelName = cloud }
+        if m.usingApple != usingApple { m.usingApple = usingApple }
+        if m.appleModel != appleModel { m.appleModel = appleModel }
         let engine: OnboardingEngine
-        if usingCloud {
+        if usingApple {
+            engine = appleModel.isAvailable && AppleIntelligence.canRun
+                ? .ready(model: AppleModel.displayName, cloud: false)
+                : .unavailable(AppleModel.unavailableMessage(appleModel == .available ? .osTooOld : appleModel))
+        } else if usingCloud {
             let c = settings.cloudModel
             engine = cloudKeys.contains(c.provider) ? .ready(model: c.name, cloud: true)
                 : .failed("no \(c.provider.name) API key")
@@ -795,20 +895,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Onboarding › Try it: checks a sample text with the current model and settings, outside any field.
     private func tryCheck(_ text: String) async throws -> [Edit] {
-        let corrector: any Corrector
-        if usingCloud {
-            let m = settings.cloudModel
-            guard let key = APIKeyStore.key(for: m.provider) else { throw TryError.notReady("No \(m.provider.name) API key") }
-            corrector = ResponsesClient(model: m, apiKey: key)
-        } else {
+        if usingLocal {
             if server.state == .unloaded { _ = server.reload(reason: "onboarding") }
             // Loading again after an idle unload: wait for it (a few seconds at most).
             for _ in 0..<150 where server.state == .starting { try await Task.sleep(for: .milliseconds(100)) }
-            guard case .ready(let base) = server.state else { throw TryError.notReady("The model isn't ready yet") }
-            server.noteUse()
-            corrector = LLMClient(baseURL: base)
         }
-        let engine = ProofreadEngine(client: corrector, options: settings.checkOptions(for: nil))
+        refreshAppleModel()
+        guard let backend = checkBackend() else {
+            switch settings.modelSource {
+            case .cloud: throw TryError.notReady("No \(settings.cloudModel.provider.name) API key")
+            case .apple: throw TryError.notReady(AppleModel.unavailableMessage(appleModel == .available ? .osTooOld : appleModel))
+            case .local: throw TryError.notReady("The model isn't ready yet")
+            }
+        }
+        if usingLocal { server.noteUse() }
+        let engine = ProofreadEngine(client: backend.corrector, options: settings.checkOptions(for: nil))
         let result = try await engine.check(text)
         Log.write("onboarding: sample checked, \(result.edits.count) fix(es)")
         return result.edits
@@ -944,8 +1045,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func refreshStatus() {
         permissionItem.isHidden = AX.isTrusted(prompt: false)
-        if case .ready = server.state, !usingCloud { unloadItem.isHidden = false } else { unloadItem.isHidden = true }
+        if case .ready = server.state, usingLocal { unloadItem.isHidden = false } else { unloadItem.isHidden = true }
         let text: String
+        if usingApple {
+            // No silent switch when the model is gone: the status says why (Settings › Models has the way back).
+            statusLine.title = appleModel.isAvailable
+                ? "Ready · \(AppleModel.displayName) (built into macOS) · \(settings.hotkey.display)"
+                : "\(AppleIntelligence.shortStatus(appleModel)) · choose another model in Settings › Models"
+            refreshPopover()
+            refreshOnboarding()
+            return
+        }
         if usingCloud {
             let m = settings.cloudModel
             statusLine.title = cloudKeys.contains(m.provider)
@@ -998,10 +1108,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let paused = settings.isPaused(app?.bundleIdentifier)
         let appName = app?.localizedName ?? "this app"
         let p = popover.model
-        if usingCloud {
+        if usingApple {
+            if p.cloudProvider != nil { p.cloudProvider = nil }
+            refreshApplePopover(paused: paused, appName: appName)
+        } else if usingCloud {
+            if p.builtIn { p.builtIn = false }
             refreshCloudPopover(paused: paused, appName: appName)
         } else {
             if p.cloudProvider != nil { p.cloudProvider = nil; p.modelID = "" }
+            if p.builtIn { p.builtIn = false; p.modelID = "" }
             refreshLocalPopover(m, paused: paused, appName: appName)
         }
         if p.ramGB != Catalog.ramGB { p.ramGB = Catalog.ramGB }
@@ -1041,6 +1156,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             p.cloudDetail = m.errorsFixed == nil
                 ? "Cloud · \(m.provider.name) · your key"
                 : "Cloud · \(m.provider.name) · " + String(format: "%.1f s per sentence", m.latencySeconds ?? 0)
+        }
+    }
+
+    /// The popover's status and model row with Apple's built-in model: no memory meter (it lives in a system
+    /// process), "Built into macOS" under the name.
+    private func refreshApplePopover(paused: Bool, appName: String) {
+        let name = AppleModel.displayName
+        let status: PopoverStatus
+        if !appleModel.isAvailable {
+            status = PopoverStatus(kind: .error, text: AppleIntelligence.shortStatus(appleModel))
+        } else if paused {
+            status = PopoverStatus(kind: .paused, text: "Paused in \(appName) · \(name)")
+        } else if isChecking {
+            status = PopoverStatus(kind: .busy, text: "Checking · \(name)")
+        } else {
+            status = PopoverStatus(kind: .ready, text: "Ready · \(name)")
+        }
+        let p = popover.model
+        if p.status != status { p.status = status }
+        if p.unloaded { p.unloaded = false }
+        if p.modelID != AppleIntelligence.id || !p.builtIn {
+            p.modelID = AppleIntelligence.id
+            p.modelName = name
+            p.builtIn = true
         }
     }
 
@@ -1114,8 +1253,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         settingsWindow.model.selectedModelID = m.id
-        if usingCloud {
-            // Back from the cloud: llama-server was stopped, so the switch below starts it.
+        if !usingLocal {
+            // Back from the cloud or Apple's model: llama-server was stopped, so the switch below starts it.
+            if session != nil || checkTask != nil { cancel() }
             settings.modelSource = .local
             Log.write("model: local \(m.id)")
         }
@@ -1130,6 +1270,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         selectedModel = m
         server.stop()
         ensureModelAndStart()
+    }
+
+    // MARK: Apple's built-in model (PLAN.md §3 "Apple Intelligence")
+
+    /// Settings › Models › Use Apple Intelligence, or its onboarding card: checks go to Apple's model at once (no
+    /// download); llama-server stops and frees its memory. Only while the model can answer.
+    private func useApple() {
+        refreshAppleModel()
+        guard appleModel.isAvailable else {
+            settingsWindow.model.showToast(.info, AppleModel.unavailableMessage(appleModel))
+            return
+        }
+        if session != nil || checkTask != nil { cancel() }
+        settings.modelSource = .apple
+        server.stop()
+        Log.write("model: apple")
+        AppleIntelligence.prewarm(system: Prompt.system(for: settings.englishVariant))
+        refreshStatus()
+        settingsWindow.model.showToast(.success, "Checks now use \(AppleModel.displayName), on this Mac")
     }
 
     // MARK: Cloud (BYOK)
@@ -1165,7 +1324,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow.model.cloudTest[provider] = nil
         Log.write("cloud: \(provider.rawValue) key removed")
         if usingCloud, settings.cloudProvider == provider {
-            selectModel(selectedModel)
+            // Back on this Mac: Apple's model when the local one isn't downloaded (no download starts by itself).
+            if appleModel.isAvailable, AppleIntelligence.canRun, !store.isInstalled(selectedModel) {
+                useApple()
+            } else {
+                selectModel(selectedModel)
+            }
             settingsWindow.model.showToast(.info, "Key removed. Checks are back on this Mac")
         } else {
             settingsWindow.model.showToast(.info, "\(provider.name) key removed")
@@ -1309,7 +1473,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// A download ended. The selected model starts once it is installed; other models just become usable.
     private func downloadFinished(_ m: ModelInfo, _ result: Result<URL, Error>) {
-        guard case .success = result, m == selectedModel, !usingCloud else {
+        guard case .success = result, m == selectedModel, usingLocal else {
             refreshStatus()
             return
         }
@@ -1346,38 +1510,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showAccessibilityToast(near: nil)
             return
         }
-        let corrector: any Corrector
-        var cloudProvider: CloudProvider?
-        let modelKey: String
-        if usingCloud {
-            let m = settings.cloudModel
-            guard let key = APIKeyStore.key(for: m.provider) else {
-                toast(.info, "Add your \(m.provider.name) API key first.", detail: "Settings › Models › Cloud",
-                      actionTitle: "Open Models", action: { [weak self] in self?.showSettings(pane: .models) },
-                      near: nil, duration: 6)
-                return
-            }
-            corrector = ResponsesClient(model: m, apiKey: key)
-            cloudProvider = m.provider
-            modelKey = "cloud:\(m.provider.rawValue):\(m.id)"
-        } else {
-            guard case .ready(let base) = server.state else {
-                // Loading (at launch, or again after an idle unload): the check runs once the model is ready.
-                if server.state == .starting || server.reload(reason: "check") {
-                    if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid() {
-                        pendingCheck = (front.processIdentifier, Date())
-                    }
-                    toast(.info, "Loading \(selectedModel.name)…", detail: "The check starts when it's ready",
-                          symbol: "hourglass", near: nil, duration: 20)
-                } else {
-                    showModelNotReady()
+        if usingApple { refreshAppleModel() }
+        guard let backend = checkBackend() else {
+            // Loading (at launch, or again after an idle unload): the check runs once the model is ready.
+            if usingLocal, server.state == .starting || server.reload(reason: "check") {
+                if let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid() {
+                    pendingCheck = (front.processIdentifier, Date())
                 }
-                return
+                toast(.info, "Loading \(selectedModel.name)…", detail: "The check starts when it's ready",
+                      symbol: "hourglass", near: nil, duration: 20)
+            } else {
+                showModelNotReady()
             }
-            server.noteUse()
-            corrector = LLMClient(baseURL: base)
-            modelKey = "local:\(selectedModel.id)"
+            return
         }
+        if usingLocal { server.noteUse() }
+        let corrector = backend.corrector
+        let cloudProvider = backend.cloudProvider
         guard let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != getpid() else { return }
         AX.prepare(app: front)
         if let id = front.bundleIdentifier { settings.noteChecked(bundleID: id, name: front.localizedName ?? id) }
@@ -1417,10 +1566,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Log.write("check: \(options.variant.rawValue), \(options.level.rawValue)"
             + (options.casual ? ", casual" : "") + (options.protectTokens ? ", protect" : "")
             + (options.englishOnly ? ", English only" : "")
-            + (cloudProvider.map { ", cloud \($0.rawValue) \(settings.cloudModel.id)" } ?? ""))
+            + (cloudProvider.map { ", cloud \($0.rawValue) \(settings.cloudModel.id)" } ?? "")
+            + (usingApple ? ", \(AppleModel.displayName)" : ""))
         // With an empty cache the pipeline sends exactly what `ProofreadEngine` would (whole paragraphs); its
         // cache makes a second check, and the re-checks of a live review, send only the sentences that changed.
-        let pipe = checkPipeline(for: modelKey, corrector: corrector)
+        let pipe = checkPipeline(for: backend)
         let liveEligible = settings.effectiveUnderlineAsYouType && cloudProvider == nil
             && scope.location == 0 && scope.length == ns.length
         let started = Date()
@@ -1491,14 +1641,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// The shared pipeline for `key` (model and provider); a different model starts with an empty cache.
-    private func checkPipeline(for key: String, corrector: any Corrector) -> CheckPipeline {
-        if let p = pipeline, pipelineKey == key { return p }
-        let p = CheckPipeline(client: corrector)
-        // The local server takes several requests at once; cloud models one at a time (rate limits).
-        if key.hasPrefix("local:") { Task { await p.setMaxConcurrentRequests(ServerManager.slots) } }
+    /// The shared pipeline for the backend's model; a different model starts with an empty cache.
+    private func checkPipeline(for b: CheckBackend) -> CheckPipeline {
+        if let p = pipeline, pipelineKey == b.key { return p }
+        let p = CheckPipeline(client: b.corrector)
+        // The local server takes several requests at once; Apple's model one until measured (`AppleModel.requestLanes`);
+        // cloud models one at a time (rate limits).
+        if let lanes = b.lanes, lanes > 1 { Task { await p.setMaxConcurrentRequests(lanes) } }
         pipeline = p
-        pipelineKey = key
+        pipelineKey = b.key
         return p
     }
 
@@ -1829,12 +1980,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let text = s.list.text
         // An automatic review whose field now holds code: no re-check (the fixes already shown stay).
         if s.auto, CodeDetector.looksLikeCode(text) { return }
-        guard case .ready = server.state else {
-            // Unloaded while idle: load it again; `serverReady` re-points the pipeline and asks again.
-            server.reload(reason: "live check")
+        if usingLocal {
+            guard case .ready = server.state else {
+                // Unloaded while idle: load it again; `serverReady` re-points the pipeline and asks again.
+                server.reload(reason: "live check")
+                return
+            }
+            server.noteUse()
+        } else if !appleModel.isAvailable {
+            // Apple's model went away during the review: the fixes shown stay, nothing more is checked.
             return
         }
-        server.noteUse()
         let el = s.snapshot.element
         let caret = AX.selection(el)?.location
         // A hotkey review covers the whole field; an automatic one, what's on screen around the caret.
@@ -2350,15 +2506,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !bounds { Log.write("auto: no text bounds in \(app); automatic check off in this field (⌃⌥G still works)") }
         }
         guard t.bounds == true else { return }
-        guard case .ready(let base) = server.state else {
-            // Unloaded while idle: load it again; `serverReady` asks for this check once it's up.
-            server.reload(reason: "automatic check")
+        guard let backend = checkBackend() else {
+            // Unloaded while idle: load it again; `serverReady` asks for this check once it's up. Apple's model
+            // unavailable: nothing to do until it comes back (`refreshAppleModel`).
+            if usingLocal { server.reload(reason: "automatic check") }
             return
         }
-        server.noteUse()
+        if usingLocal { server.noteUse() }
         let bundle = NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier
-        let client = LLMClient(baseURL: base)
-        let pipe = checkPipeline(for: "local:\(selectedModel.id)", corrector: client)
+        let client = backend.corrector
+        let pipe = checkPipeline(for: backend)
         let scheduler = autoScheduler(for: pipe)
         let options = settings.checkOptions(for: bundle)
         // What's on screen around the caret; a scroll or the next edit brings the rest.
@@ -2426,8 +2583,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// points at the new port; a ⌃⌥G that waited for it runs; the focused field gets its automatic check, and a
     /// live review re-checks what was typed while the model was loading.
     private func serverReady(_ base: URL) {
-        if let p = pipeline, pipelineKey == "local:\(selectedModel.id)" {
-            let client = LLMClient(baseURL: base)
+        guard usingLocal else { return }
+        if let p = pipeline, let b = checkBackend(), pipelineKey == b.key {
+            let client = b.corrector
             Task { await p.setClient(client, sameModel: true) }
         }
         if let pending = pendingCheck {
@@ -2511,6 +2669,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func showModelNotReady() {
+        if usingCloud {
+            let m = settings.cloudModel
+            toast(.info, "Add your \(m.provider.name) API key first.", detail: "Settings › Models › Cloud",
+                  actionTitle: "Open Models", action: { [weak self] in self?.showSettings(pane: .models) },
+                  near: nil, duration: 6)
+            return
+        }
+        if usingApple {
+            // Selected but gone (Apple Intelligence off, or a forced state on an older macOS): no silent switch.
+            let a = appleModel
+            let detail: String
+            switch a {
+            case .notEnabled: detail = "Turn it on in System Settings, or choose another model in Settings › Models"
+            case .modelNotReady: detail = "macOS is preparing the model. Try again later, or choose another model"
+            default: detail = "Choose another model in Settings › Models"
+            }
+            toast(.info, AppleIntelligence.notReadyTitle(a), detail: detail,
+                  actionTitle: a == .notEnabled ? "Open System Settings" : "Open Models",
+                  action: { [weak self] in
+                      if a == .notEnabled { AppleIntelligence.openSettings() } else { self?.showSettings(pane: .models) }
+                  },
+                  near: nil, duration: 8)
+            return
+        }
         let name = selectedModel.name
         switch server.state {
         case .ready:

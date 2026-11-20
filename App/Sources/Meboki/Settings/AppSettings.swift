@@ -45,10 +45,8 @@ enum IdleUnload: Int, CaseIterable {
     var interval: TimeInterval? { self == .never ? nil : TimeInterval(rawValue * 60) }
 }
 
-/// Where checks run: the local model (`modelID`) or a cloud model with the user's own key (BYOK).
-enum ModelSource: String {
-    case local, cloud
-}
+// `ModelSource` (local model `modelID`, Apple's built-in model, or cloud with the user's own key) lives in
+// MebokiCore with the backend rule that uses it (`ModelBackend`).
 
 /// User settings stored in `UserDefaults` (design_code.md §9), shared by the check flow, the menu-bar popover
 /// and the Settings window. The local model keeps its own key (`modelID`, in `AppDelegate`); cloud keys live
@@ -215,10 +213,14 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// Local (default) or cloud. Cloud is opt-in: only the Models pane's "Use" on a saved key turns it on.
+    /// Local (default), Apple's built-in model, or cloud. Cloud is opt-in: only the Models pane's "Use" on a saved
+    /// key turns it on. Apple is picked by the user, or set once on a fresh install (`ModelBackend.freshInstallSource`).
     @Published var modelSource: ModelSource {
         didSet { defaults.set(modelSource.rawValue, forKey: Key.modelSource) }
     }
+
+    /// A source was ever stored (chosen, or set on a fresh install): a later launch never changes it by itself.
+    var storedModelSource: String? { defaults.string(forKey: Key.modelSource) }
 
     /// The BYOK provider shown in Settings › Models and used in cloud mode. Default OpenRouter.
     @Published var cloudProvider: CloudProvider {

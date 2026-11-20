@@ -77,8 +77,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .writing:
             ["English variant", "US", "UK", "Check for", "Spelling", "Grammar", "Casual mode in chat apps",
              "Protect names, code and links", "Explain each fix", "Skip text that isn't English", "Language"]
-        case .models: ["Model", "Gemma", "Download", "Show models folder", "Hugging Face", "Cloud", "API key",
-                       "BYOK", "OpenRouter", "OpenAI", "Claude", "GPT"]
+        case .models: ["Model", "Apple Intelligence", "Built in", "Gemma", "Download", "Show models folder",
+                       "Hugging Face", "Cloud", "API key", "BYOK", "OpenRouter", "OpenAI", "Claude", "GPT"]
         case .apps: ["Check text in", "Casual", "Manual", "Off", "Add App", "Skipped by default", "Skip", "Terminal",
                      "Code editor", "IDE", "Password manager", "Remote desktop", "Code", "Password fields"]
         case .shortcuts: ["Global", "Check text", "Apply all fixes", "Apply this fix", "Skip", "Ignore",
@@ -123,6 +123,10 @@ struct SettingsActions {
     var testCloud: (CloudProvider) -> Void = { _ in }
     /// Switches checks to the selected provider's cloud model.
     var useCloud: () -> Void = {}
+    /// Switches checks to Apple's built-in model (only while it is available).
+    var useApple: () -> Void = {}
+    /// System Settings › Apple Intelligence & Siri.
+    var openAppleSettings: () -> Void = {}
     /// Opens the onboarding window (About › Welcome Guide).
     var showWelcome: () -> Void = {}
     /// Opens the update window (Check Now, or the version already found).
@@ -155,6 +159,8 @@ final class SettingsModel: ObservableObject {
     /// Providers with a key in the Keychain (`APIKeyStore`); the keys themselves never reach the UI.
     @Published var savedKeys: Set<CloudProvider> = []
     @Published var cloudTest: [CloudProvider: CloudTestState] = [:]
+    /// Apple's built-in model on this Mac (Settings › Models' built-in row).
+    @Published var appleModel: AppleModelAvailability = .osTooOld
     var actions = SettingsActions()
     /// The licence state the Licence pane, the lock marks and About show.
     let licence: LicenceManager

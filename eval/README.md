@@ -17,6 +17,10 @@ Gate for any prompt, model, or post-filter change. Python 3, stdlib only.
 | `rewrite_cases.py`, `rewrite_run.py`, `rewrite_report.py` | Rewrite detection (`RewriteDetector`): 62 extra inputs (local fixes, awkward, harsh), replies recorded from the running llama-server into `results_rewrite_e4b.json`, then scored through Core (`filter/ --rewrite`) together with the benchmark's replies. `-v` lists rewrites, `-t` the ratio table |
 | `settings_report.py` | Scores the settings (US/UK, check level, casual, protect) on a `fewshot` + `fewshot-uk` run, through the app's Core code: each reply goes through `ProofreadEngine.process` in the Swift tool `filter/` (`meboki-eval-filter`, built by the script). Also checks that `bench.py`'s prompts are byte-identical to `Prompt.swift` |
 | `filter/` | That Swift tool (an executable target in `Package.swift`, not part of the app) |
+| `runner/` | `meboki-eval-run` (executable target, not part of the app): runs cases through Apple's on-device model (`--apple`, `AppleModelClient`) or llama-server (`--server URL`, the app's `LLMClient`) and times each reply (wall, time to first token with `--stream`, cold and warm first call, `--lanes N` in flight); writes JSON lines with the Mac's chip, RAM and macOS build. `--probe` prints the Mac's facts and whether Apple's model is available (exit 3 if not). Needs no Xcode or Python on the Mac it runs on |
+| `export_cases.py` | Writes `cases.jsonl` (every `bench.py` case with a stable id, settings sets and the paragraph) and `page.jsonl` (the long-field page's paragraphs) for the runner |
+| `bench_remote.py` | Turns a bench kit's returned `results/` into standard result JSONs in `results_apple/` (`<label>-<macOS build>__fewshot[-uk].json`), prints the speed table (sentence p50/p90, paragraph, first token, cold/warm, 1/2/4 lanes and how many replies differ, long-field page), then runs `report.py`, `guard.py` and `settings_report.py` |
+| `results_apple/` | Apple Intelligence runs and the same-Mac Gemma comparison (none yet) |
 | `report.py` | Prints summary per results file; optional model substrings dump mismatches |
 | `cloud_report.py` | Cost table for cloud results (prices from `or_models.json`, an OpenRouter `/models` snapshot from 2026-11-14) |
 | `results/` | Ollama runs, 2026-11-13 (`<model>__<prompt>.json`) |
@@ -56,6 +60,33 @@ Store the OpenRouter key once with:
 ```sh
 security add-generic-password -s OPENROUTER_API_KEY -a "$USER" -w
 ```
+
+## Apple Intelligence on another Mac
+
+Apple's on-device model needs macOS 26 with Apple Intelligence on, so it is measured on a second Mac with no Xcode and no Python. Results depend on the macOS build (Apple updates the model with macOS), so every result carries it.
+
+Here (any Mac with Xcode):
+
+```sh
+Scripts/make-bench-kit.sh          # → build/meboki-bench-kit.zip (runner signed ad hoc; MEBOKI_BENCH_IDENTITY=<identity> to sign with one)
+```
+
+On the macOS 26 Mac: unzip, then in Terminal
+
+```sh
+./run-apple.sh                     # no arguments: quality (US, UK), first token, default guardrails, 2 and 4 lanes, long-field page at 1/2/4
+./run-gemma.sh [/Applications/Meboki.app]   # optional: the same cases through that app's llama-server with the downloaded Gemma 4 E2B/E4B
+```
+
+Both wrap the run in `caffeinate`, write into `results/` and zip it to `meboki-bench-results.zip`. If macOS blocks the runner after AirDrop or a download: `xattr -dr com.apple.quarantine .` in the kit folder. `run-gemma.sh` starts llama-server with the app's arguments (`-c 8192 -np 4 --kv-unified`) on a free port and stops it on exit.
+
+Back here, one command scores everything:
+
+```sh
+python3 eval/bench_remote.py ~/Downloads/meboki-bench-results/results
+```
+
+A reply the model refused (guardrails), cut at the output cap, or failed on counts as the input unchanged, as in the app; the speed table lists the error names and counts.
 
 ## Before relying on a model file
 

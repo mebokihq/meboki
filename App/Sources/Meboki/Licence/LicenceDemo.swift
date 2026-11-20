@@ -92,7 +92,8 @@ enum TrialEndedDemo {
     }
 }
 
-/// DEBUG `--popover-demo [--licence-state …] [--dark] [--app-name N]`: the menu-bar popover under a fake status item.
+/// DEBUG `--popover-demo [--licence-state …] [--dark] [--app-name N] [--use-apple [--apple-model <state>]]`: the
+/// menu-bar popover under a fake status item; `--use-apple` shows Apple's built-in model in the model row.
 @MainActor
 enum PopoverDemo {
     private static var panel: PopoverPanel?
@@ -117,6 +118,15 @@ enum PopoverDemo {
         p.model.peakMemoryGB = m.peakMemoryGB
         p.model.paragraphSeconds = m.paragraphSeconds
         p.model.ramGB = 16
+        if CommandLine.arguments.contains("--use-apple") {
+            let a = AppleIntelligence.current() == .osTooOld && AppleIntelligence.forced == nil ? .available
+                : AppleIntelligence.current()
+            p.model.modelID = AppleIntelligence.id
+            p.model.modelName = AppleModel.displayName
+            p.model.builtIn = true
+            p.model.status = a.isAvailable ? PopoverStatus(kind: .ready, text: "Ready · \(AppleModel.displayName)")
+                : PopoverStatus(kind: .error, text: AppleIntelligence.shortStatus(a))
+        }
         p.model.appName = "Notes"
         p.model.appBundleID = "com.apple.Notes"
         panel = p

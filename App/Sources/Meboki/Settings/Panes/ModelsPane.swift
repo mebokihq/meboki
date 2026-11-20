@@ -5,8 +5,10 @@ import SwiftUI
 /// per catalog model (radio = in use, glyph, name, a status line, Accuracy / Speed / Memory mini scales in a
 /// fixed column, chevron); a click shows that model in the Details group below: full scales with their
 /// numbers, "Recommended for your Mac", a memory warning, download progress, Use / Download / Pause / Resume /
-/// Retry, Delete…, and the disk-space check. Switching restarts `llama-server` (in `AppDelegate`). Below:
-/// cloud models with the user's own OpenRouter or OpenAI key (BYOK, PLAN.md §4); using one stops `llama-server`.
+/// Retry, Delete…, and the disk-space check. Switching restarts `llama-server` (in `AppDelegate`). Above the
+/// catalog: Apple's built-in model (macOS 26+, PLAN.md §3 "Apple Intelligence"), no download; using it stops
+/// `llama-server`. Below: cloud models with the user's own OpenRouter or OpenAI key (BYOK, PLAN.md §4); using one
+/// stops `llama-server`.
 struct ModelsPane: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var settings: AppSettings
@@ -18,15 +20,30 @@ struct ModelsPane: View {
         Catalog.byID(inspectedID) ?? Catalog.byID(model.selectedModelID) ?? Catalog.recommended
     }
 
+    /// Details shows Apple's model: picked in the list, or (nothing picked yet) it is the one in use.
+    private var inspectingApple: Bool {
+        inspectedID == AppleIntelligence.id || (inspectedID == nil && settings.modelSource == .apple)
+    }
+
+    /// Gemma's "Recommended" pill moves to Apple's model where that is the default (`Catalog.appleRecommended`).
+    private func recommended(_ m: ModelInfo) -> Bool {
+        m == Catalog.recommended && !Catalog.appleRecommended(model.appleModel)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsGroupHeader("Model", first: true)
             SettingsGroup {
+                AppleListRow(availability: model.appleModel, inUse: settings.modelSource == .apple,
+                             recommended: Catalog.appleRecommended(model.appleModel), inspected: inspectingApple,
+                             inspect: { inspectedID = AppleIntelligence.id },
+                             use: model.actions.useApple)
                 ForEach(Catalog.all.indices, id: \.self) { i in
-                    if i > 0 { SettingsDivider() }
+                    SettingsDivider()
                     let info = Catalog.all[i]
                     ModelListRow(info: info, status: ModelStatus(info, model: model, settings: settings, store: store),
-                                 inspected: info == inspected,
+                                 recommended: recommended(info),
+                                 inspected: !inspectingApple && info == inspected,
                                  inspect: { inspectedID = info.id },
                                  use: { model.actions.useModel(info) })
                 }
@@ -34,9 +51,14 @@ struct ModelsPane: View {
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.group, style: .continuous))
             SettingsGroupHeader("Details")
             SettingsGroup {
-                ModelDetail(info: inspected,
-                            status: ModelStatus(inspected, model: model, settings: settings, store: store),
-                            actions: model.actions)
+                if inspectingApple {
+                    AppleModelDetail(availability: model.appleModel, inUse: settings.modelSource == .apple,
+                                     recommended: Catalog.appleRecommended(model.appleModel), actions: model.actions)
+                } else {
+                    ModelDetail(info: inspected,
+                                status: ModelStatus(inspected, model: model, settings: settings, store: store),
+                                recommended: recommended(inspected), actions: model.actions)
+                }
             }
             SettingsFootnote(symbol: "lock.shield",
                              text: "Models run on this Mac. Files come from pinned Hugging Face commits and are checked with SHA-256.") {
@@ -124,6 +146,7 @@ private enum ModelFormat {
 private struct ModelListRow: View {
     let info: ModelInfo
     let status: ModelStatus
+    let recommended: Bool
     let inspected: Bool
     let inspect: () -> Void
     let use: () -> Void
@@ -156,7 +179,7 @@ private struct ModelListRow: View {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                             Text(info.shortName).font(DS.Font.bodyMedium).foregroundStyle(DS.text).lineLimit(1)
-                            if info == Catalog.recommended { Pill("Recommended", kind: .brand) }
+                            if recommended { Pill("Recommended", kind: .brand) }
                         }
                         (Text(info.tagline + " · ").foregroundStyle(DS.textSecondary)
                          + Text(status.text(info)).foregroundStyle(status.textColor))
@@ -177,7 +200,7 @@ private struct ModelListRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(info.shortName + (info == Catalog.recommended ? ", recommended for your Mac" : ""))
+            .accessibilityLabel(info.shortName + (recommended ? ", recommended for your Mac" : ""))
             .accessibilityValue("\(status.text(info)). Accuracy \(info.ratings.accuracy) of 5, speed \(info.ratings.speed) of 5, "
                                 + "\(info.ratings.memoryWord.lowercased()) memory")
             .accessibilityHint("Shows the details below")
@@ -259,6 +282,7 @@ struct MemoryScale: View {
 private struct ModelDetail: View {
     let info: ModelInfo
     let status: ModelStatus
+    let recommended: Bool
     let actions: SettingsActions
 
     var body: some View {
@@ -309,7 +333,7 @@ private struct ModelDetail: View {
                 HStack(spacing: 6) {
                     Text(info.shortName).font(.system(size: 15, weight: .semibold)).foregroundStyle(DS.text)
                         .padding(.trailing, 2)
-                    if info == Catalog.recommended { Pill("Recommended for your Mac", kind: .brand) }
+                    if recommended { Pill("Recommended for your Mac", kind: .brand) }
                     if status.inUse { Pill("In use", kind: .success) } else if status.installed { Pill("Downloaded") }
                 }
                 (Text(info.tagline + " · ") + Text(.init("[\(info.license.name)](\(info.license.url.absoluteString))")))
@@ -435,6 +459,177 @@ private struct ModelDetail: View {
         guard free < needed else { return nil }
         return String(format: "Not enough disk space: needs %.1f GB, this Mac has %.1f GB free. Delete a model or free up space.",
                       Double(needed) / 1e9, Double(free) / 1e9)
+    }
+}
+
+// MARK: - Apple's built-in model
+
+/// The built-in row above the catalog (design_code.md §8.3): radio, glyph, "Apple Intelligence" over its status,
+/// "Not measured yet" where the scales go (no benchmark on macOS 26 yet; never a made-up number), chevron. The
+/// radio switches to it only while it is available.
+private struct AppleListRow: View {
+    let availability: AppleModelAvailability
+    let inUse: Bool
+    let recommended: Bool
+    let inspected: Bool
+    let inspect: () -> Void
+    let use: () -> Void
+    @State private var hovering = false
+
+    private var active: Bool { inUse && availability.isAvailable }
+    private var canUse: Bool { availability.isAvailable && !inUse }
+    /// Selected but gone (Apple Intelligence turned off): said in the status, in red, with no silent switch.
+    private var lost: Bool { inUse && !availability.isAvailable }
+
+    private var statusText: String {
+        lost ? "Selected, but " + AppleIntelligence.shortStatus(availability).lowercased()
+             : AppleIntelligence.statusText(availability, inUse: inUse)
+    }
+
+    private var statusColor: Color { active ? DS.ok : lost ? DS.catSpelling : DS.textSecondary }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button {
+                inspect()
+                if canUse { use() }
+            } label: {
+                RadioDot(isOn: active)
+                    .opacity(availability.isAvailable ? 1 : 0.35)
+                    .padding(.vertical, 9)
+                    .padding(.leading, 14)
+                    .padding(.trailing, 12)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(active ? "In use" : canUse ? "Use \(AppleModel.displayName)" : AppleModel.unavailableMessage(availability))
+            .accessibilityLabel(active ? "\(AppleModel.displayName), in use" : "Use \(AppleModel.displayName)")
+            .accessibilityAddTraits(active ? [.isButton, .isSelected] : .isButton)
+            Button(action: inspect) {
+                HStack(spacing: 12) {
+                    ModelGlyph(modelID: AppleIntelligence.id, initial: "A", size: 28)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(AppleModel.displayName).font(DS.Font.bodyMedium).foregroundStyle(DS.text).lineLimit(1)
+                            if recommended { Pill("Recommended", kind: .brand) }
+                        }
+                        (Text("Built into macOS · ").foregroundStyle(DS.textSecondary)
+                         + Text(statusText).foregroundStyle(statusColor))
+                            .font(DS.Font.caption)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Not measured yet")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(DS.textTertiary)
+                        .frame(width: 130, alignment: .leading)
+                        .accessibilityHidden(true)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(inspected ? DS.brand : DS.textTertiary)
+                        .frame(width: 10)
+                }
+                .padding(.vertical, 9)
+                .padding(.trailing, 14)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(AppleModel.displayName + (recommended ? ", recommended" : ""))
+            .accessibilityValue("Built into macOS. \(statusText)")
+            .accessibilityHint("Shows the details below")
+            .accessibilityAddTraits(inspected ? [.isButton, .isSelected] : .isButton)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: 50)
+        .background(inspected ? DS.control : hovering ? DS.hover : Color.clear)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// Apple's model in Details: no file, so no Download or Delete. Accuracy and speed say "Not measured yet" until
+/// the macOS 26 benchmark is in; memory is "Built in". A line says it is Apple's model, not an open one.
+private struct AppleModelDetail: View {
+    let availability: AppleModelAvailability
+    let inUse: Bool
+    let recommended: Bool
+    let actions: SettingsActions
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ModelGlyph(modelID: AppleIntelligence.id, initial: "A", size: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(AppleModel.displayName).font(.system(size: 15, weight: .semibold)).foregroundStyle(DS.text)
+                            .padding(.trailing, 2)
+                        if recommended { Pill("Recommended for your Mac", kind: .brand) }
+                        if inUse && availability.isAvailable { Pill("In use", kind: .success) } else { Pill("Built in") }
+                    }
+                    Text("Built into macOS · no download")
+                        .font(DS.Font.caption)
+                        .foregroundStyle(DS.textSecondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack(spacing: 8) {
+                tile("Accuracy", "Not measured yet")
+                tile("Speed", "Not measured yet")
+                tile("Memory · Built in", "Built in · no extra memory")
+            }
+            note("lock.shield", DS.textSecondary,
+                 "Apple's on-device model, part of macOS. It isn't an open model. The text you check stays on this Mac.")
+            switch availability {
+            case .available:
+                if !inUse {
+                    Button("Use \(AppleModel.displayName)", action: actions.useApple).buttonStyle(.ds(.primary, small: true))
+                }
+            case .notEnabled:
+                note("exclamationmark.triangle.fill", DS.catPunctuation,
+                     "Apple Intelligence is off. Turn it on in System Settings › Apple Intelligence & Siri; macOS then prepares the model.")
+                Button("Open System Settings", action: actions.openAppleSettings).buttonStyle(.ds(.secondary, small: true))
+            case .modelNotReady:
+                note("hourglass", DS.textSecondary,
+                     "macOS is still preparing the model. It downloads in the background after Apple Intelligence is turned on.")
+            case .deviceNotEligible:
+                note("exclamationmark.triangle.fill", DS.catPunctuation,
+                     "Apple Intelligence isn't supported on this Mac, or in its current region or language.")
+            case .osTooOld:
+                note("info.circle", DS.textSecondary, "Needs macOS 26 or later with Apple Intelligence on.")
+            }
+            if inUse && !availability.isAvailable {
+                note("exclamationmark.triangle.fill", DS.catSpelling,
+                     "Checks are set to Apple Intelligence, which isn't available now. Choose another model above.")
+            }
+        }
+        .padding(14)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(AppleModel.displayName) details")
+    }
+
+    private func tile(_ title: String, _ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(DS.textSecondary)
+            Text(detail).font(DS.Font.footnote).foregroundStyle(DS.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(DS.control))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func note(_ symbol: String, _ color: Color, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: symbol).font(.system(size: 11))
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(DS.Font.caption)
+        .foregroundStyle(color)
     }
 }
 

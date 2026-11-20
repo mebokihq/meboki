@@ -4,6 +4,8 @@ import MebokiCore
 
 /// DEBUG `--onboarding-demo [step] [--dark] [--trusted] [--downloading] [--no-model] [--licence-state …]`: the real onboarding window with sample
 /// state (its own `UserDefaults` suite, fake model states, no server), shown without activating. For screenshots.
+/// Apple's built-in model: `--apple-model available|notEnabled|modelNotReady|deviceNotEligible|osTooOld` sets its
+/// card (default: what this Mac says; osTooOld hides it), `--use-apple` makes it the model in use (picked, ready).
 @MainActor
 enum OnboardingDemo {
     private static var controller: OnboardingWindowController?
@@ -34,6 +36,13 @@ enum OnboardingDemo {
         model.askedForAccess = !trusted
         if CommandLine.arguments.contains("--no-model") { store.demoInstalled = [] }
         model.engine = CommandLine.arguments.contains("--no-model") ? .needsModel(nil) : downloading ? .downloading(m.shortName, fraction: 0.37) : .ready(model: m.shortName, cloud: false)
+        model.appleModel = AppleIntelligence.current()
+        if CommandLine.arguments.contains("--use-apple") {
+            model.usingApple = true
+            model.pickedModelID = AppleIntelligence.id
+            model.engine = model.appleModel.isAvailable ? .ready(model: AppleModel.displayName, cloud: false)
+                : .unavailable(AppleModel.unavailableMessage(model.appleModel))
+        }
         if step == .tryIt, !downloading {
             let text = OnboardingModel.sample
             let fixes: [(String, String)] = [("Their", "They're"), ("libary", "library"), ("tomorow", "tomorrow"),

@@ -20,7 +20,10 @@ struct PrivacyPane: View {
                     SettingsRow("Text sent to the internet") { Pill("Never", kind: .success) }
                 }
                 SettingsDivider()
-                SettingsRow("Model downloads", subtitle: "Pinned Hugging Face files, checked with SHA-256") {
+                SettingsRow("Model downloads",
+                            subtitle: settings.modelSource == .apple
+                                ? "Only when you download an open model; Apple Intelligence is part of macOS"
+                                : "Pinned Hugging Face files, checked with SHA-256") {
                     Pill("huggingface.co")
                 }
                 SettingsDivider()
@@ -64,7 +67,7 @@ struct PrivacyPane: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(cloud ? "Cloud mode: checks go to \(settings.cloudProvider.name)" : "Your text never leaves this Mac")
                     .font(.system(size: 16, weight: .semibold)).foregroundStyle(DS.text)
-                Text(cloud ? "With your own key. Pick a local model in Settings › Models to keep text on this Mac."
+                Text(cloud ? "With your own key. Pick a model on this Mac in Settings › Models to keep text here."
                            : "The model runs locally. No account, no analytics, no cloud.")
                     .font(DS.Font.link)
                     .foregroundStyle(DS.textSecondary)

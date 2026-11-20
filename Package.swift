@@ -27,6 +27,13 @@ let package = Package(
             dependencies: ["MebokiCore"],
             path: "eval/filter"
         ),
+        // eval/: runs benchmark cases through Apple's built-in model or llama-server and times them, on any Mac
+        // without Xcode (`Scripts/make-bench-kit.sh`, `eval/bench_remote.py`). Not part of the app.
+        .executableTarget(
+            name: "meboki-eval-run",
+            dependencies: ["MebokiCore"],
+            path: "eval/runner"
+        ),
         // Menu-bar app: accessibility, hotkey, panel, model download, llama-server process.
         .executableTarget(
             name: "Meboki",

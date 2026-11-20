@@ -10,8 +10,10 @@ enum OnboardingStep: Int, CaseIterable {
 
 /// Where checks stand, for the model and "Try it" pages (set by `AppDelegate.refreshStatus`).
 enum OnboardingEngine: Equatable {
-    /// The local model answers, or a cloud model with a saved key is in use.
+    /// The local model answers, Apple's built-in model is available, or a cloud model with a saved key is in use.
     case ready(model: String, cloud: Bool)
+    /// Apple's built-in model is selected but can't answer (Apple Intelligence off, model not ready): why.
+    case unavailable(String)
     case loading(String)
     case downloading(String, fraction: Double)
     /// Downloading paused, failed, or never started: the model page has the buttons.
@@ -40,6 +42,10 @@ struct OnboardingActions {
     var revealApp: () -> Void = {}
     /// Makes `m` the model checks use, downloading it first when it isn't installed.
     var useModel: (ModelInfo) -> Void = { _ in }
+    /// Makes Apple's built-in model the one checks use (no download).
+    var useApple: () -> Void = {}
+    /// System Settings › Apple Intelligence & Siri.
+    var openAppleSettings: () -> Void = {}
     var pause: (ModelInfo) -> Void = { _ in }
     var openSettings: (SettingsPane) -> Void = { _ in }
     /// Settings › Licence (the Done page's key link and locked controls).
@@ -67,6 +73,10 @@ final class OnboardingModel: ObservableObject {
     @Published var selectedModelID: String
     /// Checks use a cloud model (Settings › Models › Cloud).
     @Published var cloudModelName: String?
+    /// Checks use Apple's built-in model.
+    @Published var usingApple = false
+    /// Apple's built-in model on this Mac: the model page shows its card from macOS 26 on.
+    @Published var appleModel: AppleModelAvailability = .osTooOld
     @Published var engine: OnboardingEngine = .needsModel(nil)
     @Published var tryState: OnboardingTryState = .idle
     @Published var launchAtLogin = false

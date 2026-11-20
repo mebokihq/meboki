@@ -40,7 +40,7 @@ struct GeneralPane: View {
                 // Milestone B step 2: a review started with the hotkey follows typing. Checking any field on its
                 // own (FocusTracker) is the next step.
                 SettingsRow("Underline mistakes as I type",
-                            subtitle: "Checks the text area you type in when you pause, no shortcut needed, and keeps the underlines up to date. Local model only") {
+                            subtitle: "Checks the text area you type in when you pause, no shortcut needed, and keeps the underlines up to date. Models on this Mac only, not cloud") {
                     SettingsSwitch(isOn: $settings.underlineAsYouType, label: "Underline mistakes as I type")
                         .licenceLocked(.automaticCheck)
                 }

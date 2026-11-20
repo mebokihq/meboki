@@ -532,7 +532,14 @@ struct ModelGlyph: View {
     var body: some View {
         RoundedRectangle(cornerRadius: DS.Radius.glyph, style: .continuous)
             .fill(DS.modelGradient(for: modelID))
-            .overlay(Text(initial).font(.system(size: size * 0.47, weight: .bold)).foregroundStyle(DS.onAccent))
+            .overlay {
+                // Apple's built-in model (`AppleIntelligence.id`) gets a neutral symbol instead of a letter.
+                if modelID == "apple" {
+                    Image(systemName: "sparkles").font(.system(size: size * 0.46, weight: .semibold)).foregroundStyle(DS.onAccent)
+                } else {
+                    Text(initial).font(.system(size: size * 0.47, weight: .bold)).foregroundStyle(DS.onAccent)
+                }
+            }
             .frame(width: size, height: size)
             .accessibilityHidden(true)
     }

@@ -5,6 +5,8 @@ import MebokiCore
 
 /// DEBUG `--settings-demo`: the real Settings window with the HTML reference's sample state, for comparing
 /// with the `app-*` screenshots. Uses its own `UserDefaults` suite and fake model states; never activates.
+/// Apple's built-in model: `--apple-model available|notEnabled|modelNotReady|deviceNotEligible|osTooOld` sets the
+/// row's state (default: what this Mac says), `--use-apple` makes it the model in use.
 @MainActor
 enum SettingsDemo {
     private static var controller: SettingsWindowController?
@@ -38,6 +40,8 @@ enum SettingsDemo {
 
         let model = SettingsModel(pane: pane, selectedModelID: Catalog.gemma4E4B.id, licence: licence)
         model.launchAtLogin = true
+        model.appleModel = AppleIntelligence.current()
+        if CommandLine.arguments.contains("--use-apple") { settings.modelSource = .apple }
         let c = SettingsWindowController(model: model, settings: settings, store: store)
         controller = c
         c.show(activate: false)

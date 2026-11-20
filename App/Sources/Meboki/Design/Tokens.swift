@@ -177,6 +177,8 @@ extension DS {
         case let id where id.hasPrefix("gemma-4-e2b"): pair = (0x22C3B5, 0x7CD957)
         case let id where id.hasPrefix("qwen"): pair = (0x8B5CF6, 0xEC4899)
         case let id where id.hasPrefix("llama"): pair = (0x0866FF, 0x5AC8FA)
+        // Apple's built-in model: a warm-to-violet gradient with a neutral glyph (`ModelGlyph`), never the Apple logo.
+        case "apple": pair = (0xFF8A3D, 0x9B5CFF)
         default: pair = (0x8E8E93, 0x636366)
         }
         return LinearGradient(colors: [Color(nsColor: .hex(pair.0)), Color(nsColor: .hex(pair.1))],
