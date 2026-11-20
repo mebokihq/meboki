@@ -291,7 +291,7 @@ struct PopoverView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(model.modelName).font(DS.Font.bodySemibold).foregroundStyle(DS.text)
                     if model.builtIn {
-                        Text("Built into macOS · no download")
+                        Text("Built into macOS · " + String(format: "%.1f s", AppleModel.paragraphSeconds) + " per paragraph")
                             .font(DS.Font.footnote)
                             .foregroundStyle(DS.textSecondary)
                             .lineLimit(1)

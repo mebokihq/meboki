@@ -465,7 +465,7 @@ private struct ModelDetail: View {
 // MARK: - Apple's built-in model
 
 /// The built-in row above the catalog (design_code.md §8.3): radio, glyph, "Apple Intelligence" over its status,
-/// "Not measured yet" where the scales go (no benchmark on macOS 26 yet; never a made-up number), chevron. The
+/// the Acc and Speed scales from its benchmark (`AppleModel`) with "Built in" for memory, chevron. The
 /// radio switches to it only while it is available.
 private struct AppleListRow: View {
     let availability: AppleModelAvailability
@@ -521,11 +521,14 @@ private struct AppleListRow: View {
                             .lineLimit(1)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Text("Not measured yet")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(DS.textTertiary)
-                        .frame(width: 130, alignment: .leading)
-                        .accessibilityHidden(true)
+                    HStack(spacing: 8) {
+                        scaleColumn("Acc") { ScaleDots(value: AppleModel.accuracyRating, dot: 5) }
+                        scaleColumn("Speed") { ScaleDots(value: AppleModel.speedRating, dot: 5) }
+                        scaleColumn("Mem") {
+                            Text("Built in").font(.system(size: 8.5)).foregroundStyle(DS.textTertiary).fixedSize()
+                        }
+                    }
+                    .accessibilityHidden(true)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(inspected ? DS.brand : DS.textTertiary)
@@ -538,7 +541,8 @@ private struct AppleListRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(AppleModel.displayName + (recommended ? ", recommended" : ""))
-            .accessibilityValue("Built into macOS. \(statusText)")
+            .accessibilityValue("Built into macOS. \(statusText). Accuracy \(AppleModel.accuracyRating) of 5, "
+                                + "speed \(AppleModel.speedRating) of 5, no extra memory")
             .accessibilityHint("Shows the details below")
             .accessibilityAddTraits(inspected ? [.isButton, .isSelected] : .isButton)
         }
@@ -547,10 +551,22 @@ private struct AppleListRow: View {
         .background(inspected ? DS.control : hovering ? DS.hover : Color.clear)
         .onHover { hovering = $0 }
     }
+
+    /// Same column as `MiniScales` (width 38, caps label over the scale).
+    private func scaleColumn(_ label: String, @ViewBuilder scale: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .semibold))
+                .kerning(0.4)
+                .foregroundStyle(DS.textSecondary)
+            scale()
+        }
+        .frame(width: 38, alignment: .leading)
+    }
 }
 
-/// Apple's model in Details: no file, so no Download or Delete. Accuracy and speed say "Not measured yet" until
-/// the macOS 26 benchmark is in; memory is "Built in". A line says it is Apple's model, not an open one.
+/// Apple's model in Details: no file, so no Download or Delete. Accuracy and speed come from its benchmark
+/// (`AppleModel`); memory is "Built in". A line says it is Apple's model, not an open one.
 private struct AppleModelDetail: View {
     let availability: AppleModelAvailability
     let inUse: Bool
@@ -576,9 +592,13 @@ private struct AppleModelDetail: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: 8) {
-                tile("Accuracy", "Not measured yet")
-                tile("Speed", "Not measured yet")
-                tile("Memory · Built in", "Built in · no extra memory")
+                tile("Accuracy", "Fixed \(AppleModel.errorsFixed) of 45 test mistakes") {
+                    ScaleDots(value: AppleModel.accuracyRating)
+                }
+                tile("Speed", String(format: "About %.1f s per paragraph", AppleModel.paragraphSeconds)) {
+                    ScaleDots(value: AppleModel.speedRating)
+                }
+                tile("Memory · Built in", "No extra memory or download") { EmptyView() }
             }
             note("lock.shield", DS.textSecondary,
                  "Apple's on-device model, part of macOS. It isn't an open model. The text you check stays on this Mac.")
@@ -610,9 +630,10 @@ private struct AppleModelDetail: View {
         .accessibilityLabel("\(AppleModel.displayName) details")
     }
 
-    private func tile(_ title: String, _ detail: String) -> some View {
+    private func tile(_ title: String, _ detail: String, @ViewBuilder scale: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(DS.textSecondary)
+            scale()
             Text(detail).font(DS.Font.footnote).foregroundStyle(DS.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

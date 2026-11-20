@@ -114,9 +114,20 @@ public enum AppleModel {
     public static let displayName = "Apple Intelligence"
     /// Pipeline cache key (`CheckPipeline` is per model).
     public static let cacheKey = "apple:system"
-    /// Requests in flight at once. Not measured yet (PLAN.md §3, benchmark pending): one, until the eval
-    /// runner's 1 / 2 / 4 lane numbers say more is faster.
+    /// Requests in flight at once: one. Measured (PLAN.md §3 "Apple Intelligence"): with 2 or 4 lanes each
+    /// reply takes 2× or 4× as long, so the whole run isn't faster.
     public static let requestLanes = 1
+
+    // Benchmark of 2026-11-20 (`eval/results_apple/`, MacBook Pro M1 Pro 32 GB, macOS build 26B131, same prompt
+    // and post-filters as the catalog models). Apple updates the model with macOS, so these belong to that build.
+    /// Mistakes fixed, of 45 (21 of 22 correct sentences were left alone; no refusals).
+    public static let errorsFixed = 39
+    /// Seconds for the 5-sentence paragraph.
+    public static let paragraphSeconds = 1.7
+    /// The Models pane's 1–5 scales (PLAN.md §3 "How Models Are Shown"): 39 of 45 sits with Qwen3.5 and Llama 3.1;
+    /// the paragraph time is about 2× the fastest catalog model's.
+    public static let accuracyRating = 3
+    public static let speedRating = 3
 
     /// Output cap in tokens: twice the input's UTF-16 length plus slack. Larger than `LLMClient.maxTokens(for:)`
     /// because the framework doesn't say whether a reply stopped at the cap; with this cap only a reply at least

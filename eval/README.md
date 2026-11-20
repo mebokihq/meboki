@@ -16,11 +16,12 @@ Gate for any prompt, model, or post-filter change. Python 3, stdlib only.
 | `language_report.py` | Language gate (Settings › Writing › "Skip text that isn't English"): runs every benchmark input, `LANG_ENGLISH`, the repo's docs and the long-field page (must stay fully English), `LANG_FOREIGN` (fully left out) and `LANG_MIXED` (exactly the foreign sentences) through `LanguageGate` via `filter/ --language`. No model needed. `-v` lists `LANG_SHORT` |
 | `rewrite_cases.py`, `rewrite_run.py`, `rewrite_report.py` | Rewrite detection (`RewriteDetector`): 62 extra inputs (local fixes, awkward, harsh), replies recorded from the running llama-server into `results_rewrite_e4b.json`, then scored through Core (`filter/ --rewrite`) together with the benchmark's replies. `-v` lists rewrites, `-t` the ratio table |
 | `settings_report.py` | Scores the settings (US/UK, check level, casual, protect) on a `fewshot` + `fewshot-uk` run, through the app's Core code: each reply goes through `ProofreadEngine.process` in the Swift tool `filter/` (`meboki-eval-filter`, built by the script). Also checks that `bench.py`'s prompts are byte-identical to `Prompt.swift` |
+| `false_fixes.jsonl`, `false_fixes_report.py` | Regression file of wrong suggestions: each line is one bad fix seen once (a user report or a found pattern), the model reply that caused it and the text the check must give instead. Replayed through `CheckPipeline` with the recorded reply in place of the model (`filter/ --false-fixes`), so the sentence cache, post-filters and settings are the app's; a case with `steps` runs several checks in order (typing, cache reuse). Must stay all ok: run it with every post-filter, cache or prompt change, and add a line for every new wrong suggestion. No model needed |
 | `filter/` | That Swift tool (an executable target in `Package.swift`, not part of the app) |
 | `runner/` | `meboki-eval-run` (executable target, not part of the app): runs cases through Apple's on-device model (`--apple`, `AppleModelClient`) or llama-server (`--server URL`, the app's `LLMClient`) and times each reply (wall, time to first token with `--stream`, cold and warm first call, `--lanes N` in flight); writes JSON lines with the Mac's chip, RAM and macOS build. `--probe` prints the Mac's facts and whether Apple's model is available (exit 3 if not). Needs no Xcode or Python on the Mac it runs on |
 | `export_cases.py` | Writes `cases.jsonl` (every `bench.py` case with a stable id, settings sets and the paragraph) and `page.jsonl` (the long-field page's paragraphs) for the runner |
 | `bench_remote.py` | Turns a bench kit's returned `results/` into standard result JSONs in `results_apple/` (`<label>-<macOS build>__fewshot[-uk].json`), prints the speed table (sentence p50/p90, paragraph, first token, cold/warm, 1/2/4 lanes and how many replies differ, long-field page), then runs `report.py`, `guard.py` and `settings_report.py` |
-| `results_apple/` | Apple Intelligence runs and the same-Mac Gemma comparison (none yet) |
+| `results_apple/` | Apple Intelligence runs (2026-11-20, M1 Pro, build 26B131: 39/45 fixed, 21/22 kept) and the same-Mac Gemma comparison (not run yet) |
 | `report.py` | Prints summary per results file; optional model substrings dump mismatches |
 | `cloud_report.py` | Cost table for cloud results (prices from `or_models.json`, an OpenRouter `/models` snapshot from 2026-11-14) |
 | `results/` | Ollama runs, 2026-11-13 (`<model>__<prompt>.json`) |
@@ -45,6 +46,7 @@ python3 bench_or.py results_cloud anthropic/claude-haiku-5.5
 python3 report.py results_text            # raw scores
 python3 report.py results_text gemma4     # + mismatches for matching models
 python3 guard.py results_text             # scores after post-filters
+python3 false_fixes_report.py             # known wrong suggestions stay fixed (-v lists every case)
 # Settings (stage 9): record both prompts, then score every setting through Core
 LLAMA_SERVER=../Vendor/bin/llama-server python3 bench_ls.py results_settings gemma4-e4b-q4_0-text \
     ~/Library/Application\ Support/Meboki/Models/gemma-4-E4B-it-Q4_0.gguf fewshot,fewshot-uk

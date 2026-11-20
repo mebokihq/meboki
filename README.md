@@ -22,7 +22,7 @@
 
 - **Works in any app:** native text fields, Safari, Chrome and web editors such as Gmail, Notion, Slack, x.com and Obsidian.
 - **Runs on your Mac:** Gemma 4 through a bundled [llama.cpp](https://github.com/ggml-org/llama.cpp) server. Works offline after the model download.
-- **Apple Intelligence, no download:** on macOS 26 with Apple Intelligence on, Apple's on-device model can check your text right away (not benchmarked yet; Gemma is the more tested choice).
+- **Apple Intelligence, no download:** on macOS 26 with Apple Intelligence on, Apple's on-device model can check your text right away. It fixed 39 of 45 test mistakes; Gemma 4 is more accurate (43 to 45).
 - **Checks as you type,** or on demand with **⌃⌥G**.
 - **Wavy underlines** by kind of mistake. Return applies every fix, Shift-Return applies one, and ⌘Z in your app undoes it.
 - **Three popup styles:** glass card, anchored bubble, island under the menu bar.
@@ -36,8 +36,8 @@
 
 1. [Download the DMG](https://meboki.com/api/download) and drag Meboki to Applications.
 2. Open it. The Welcome window walks you through setup:
-   - turn on Meboki in **System Settings › Privacy & Security › Accessibility**;
-   - choose the writing model: Apple Intelligence where it's available (no download), or download Gemma 4 (E4B on 16 GB+ Macs, E2B on 8 GB);
+   - choose the writing model: Apple Intelligence where it's available (no download), or download Gemma 4. Recommended: Apple Intelligence on 8 GB Macs, Gemma 4 E2B on 16 GB, Gemma 4 E4B on 32 GB or more;
+   - turn on Meboki in **System Settings › Privacy & Security › Accessibility** (needed to go on);
    - try it on a sample sentence.
 
 Reopen the guide any time: right-click the menu-bar icon › Welcome Guide.

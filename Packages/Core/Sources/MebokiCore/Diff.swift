@@ -39,9 +39,14 @@ public enum Diff {
 
     /// LCS alignment over tokens. `ignoringCase`: tokens that differ only in case count as the same.
     static func align(_ a: [Token], _ b: [Token], ignoringCase: Bool = false) -> [Op] {
+        align(a, b, key: ignoringCase ? { $0.lowercased() } : { $0 })
+    }
+
+    /// LCS alignment over tokens compared by `key`: tokens with the same key count as the same.
+    static func align(_ a: [Token], _ b: [Token], key: (String) -> String) -> [Op] {
         let n = a.count, m = b.count
-        let ka = ignoringCase ? a.map { $0.text.lowercased() } : a.map(\.text)
-        let kb = ignoringCase ? b.map { $0.text.lowercased() } : b.map(\.text)
+        let ka = a.map { key($0.text) }
+        let kb = b.map { key($0.text) }
         var lcs = [[Int32]](repeating: [Int32](repeating: 0, count: m + 1), count: n + 1)
         if n > 0 && m > 0 {
             for i in stride(from: n - 1, through: 0, by: -1) {

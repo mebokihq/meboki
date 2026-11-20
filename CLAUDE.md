@@ -4,16 +4,55 @@ Guidance for Claude Code when working in this repository.
 
 ## What this is
 
-**Meboki** is an open-source (GPL-3.0), local, Grammarly-like grammar checker for macOS. It checks English text in any app's text field with a local open-source LLM. Text never leaves the Mac.
+**Meboki** is an open-source (GPL-3.0), local, Grammarly-like grammar checker for macOS. It checks English text in any app's text field with a local open-source LLM (Gemma 4 through a bundled `llama-server`), or on macOS 26 with Apple's built-in on-device model. Text never leaves the Mac unless the user turns on cloud. A menu-bar app for Apple Silicon, macOS 14+.
 
-- **Today (Milestone A + UI redesign stage 9):** a menu-bar app. **⌃⌥G** proofreads the focused field, or the selection if there is one. The mistakes get wavy underlines in the field; a click on one opens a glass card under that word: **⏎** applies all fixes, **⇧⏎** applies this one, **⇥** ignores it, **← →** move between fixes, **Esc** closes the card. Esc with no card or leaving the field clears the underlines; typing does too, except in a live review (Milestone B step 2: whole field, local model, "Underline mistakes as I type" on), where the fixes follow the text and the edited sentences are re-checked after a pause through `CheckScheduler`. With that setting on and the local model, no hotkey is needed (Milestone B step 3, `FocusTracker`): the focused editable text area is checked after a typing pause (or on focus), and fixes show as underlines only (an automatic review; Esc mutes the field until focus moves; ignored fixes stay ignored). Apps that give no text bounds get the card below the field instead. The popup can be the glass card, the anchored bubble, or the island HUD (Settings › General). The island is a dark capsule under the menu bar that shows checking, the current fix (it takes ⏎ ⇧⏎ ⇥ ← → Esc and passes other keys to the app), the done line and messages. In card and bubble style, messages and the done line are glass toasts. A left-click on the menu-bar icon opens the popover (status, Check focused field, Pause in {App}, English, Check level, model row); a right-click opens the debug menu. The Settings window (⌘, or the popover gear) has General (popup style, launch at login, show in menu bar, shortcut recorder), Appearance (color tone: Vivid / Eased / Muted / Dusty, live bubble preview; `ColorTone`, `DS.tone`), Writing, Models (download, pause, resume, SHA-256 check, use; plus BYOK cloud: OpenRouter or OpenAI key in the Keychain, model, Test, Use), Apps (On / Casual / Manual / Off per app; a built-in skip list: terminals and code editors Manual, password managers and remote desktops Off, `AppRules`; a field that looks like code gets no automatic check, `CodeDetector`), Shortcuts, Privacy (log snippets switch) and About. Writing's English variant picks the prompt (US or UK, fixed per session); Check for, Casual mode (chat apps, or an app set to Casual) and Protect names/code/links are post-filters on the model's reply. Skip text that isn't English (off by default, `LanguageGate`) keeps foreign paragraphs and sentences from the model.
-- **Cloud (BYOK, opt-in):** with a key saved and **Use** pressed, checks go to OpenRouter or OpenAI through the Responses API (`ResponsesClient`) and `llama-server` stops. Text then leaves the Mac; the UI says so (cloud symbol, provider name). Local stays the default.
-- **Text-marker adapter (Milestone B step 4):** Chromium `contenteditable` (x.com, Gmail, Notion, Slack, Obsidian) gets underlines through its static-text leaves; Mail compose (a WebKit editable `AXWebArea`) is read, selected and measured through text markers and written by select + paste. Read field text, selection and bounds through `AX.text` / `AX.selection` / `AX.select` / `AX.bounds(el, range, text:)`, never `kAXValueAttribute` directly.
-- **Performance work done:** long fields (grouped Apply all, `KeyGuard` holds ⏎ during an apply, leaf-based visible range for Chromium, `llama-server -np 4 --kv-unified` + pipeline lookahead, in-place leaf map; on the 300-fix benchmark page `docs/bench/long-field-300-fixes.html`: first check ~50 s → ~4 s, Apply all 102 s → 28 s) and idle unload (`ServerManager`: Settings › Models › Unload when idle, memory pressure, reload on the next check).
-- **Onboarding:** the first launch opens a Welcome window: Accessibility with a live-detected grant, model download (nothing downloads until the user presses Download; no launch starts a download), a sample check, final switches. Reopen: right-click menu › Welcome Guide…, Settings › About.
-- **Licence (stage A2):** a 7-day trial, then a free mode (hotkey check only; the Stays-free list is untouched). `LicenceManager` joins the stored key, the revoked list and the trial clock into an `Entitlement`; `AppSettings` keeps the stored values and exposes `effective…` ones (`effectivePopupStyle`, `effectiveCheckLevel`, `effectiveCasualMode`, `effectiveUnderlineAsYouType`, `effectiveAppMode(_:)`), which the check flow must read instead of the stored ones. `meboki://activate?key=…` activates a key (`AppDelegate.handleActivationURL`) and shows the result in Settings › Licence (`AppDelegate.showLicence()` opens that pane). In free mode Settings keeps the stored values, dimmed with a lock; a click on a locked control opens a "Needs a licence" popover. Nothing is sent but a daily GET of the public revoked list, and only with a licence installed. **Where the user meets it (stage A4):** the onboarding Done page has a licence card (trial, free or licensed; in free mode the underline switch and the bubble / island choices on the Popup page are locked); once, when the app first finds itself in free mode, the Trial ended window opens (`TrialEndedWindowController`, brought to the front with `orderFrontRegardless`, never activated, so the keyboard stays in the app being typed in); a refunded, cancelled or expired key gets the same window with other wording, once per key; on the last trial day, after its first check, one toast "Last day of the full trial" (waits while a check runs or a popup is on screen). The popover shows "Trial · N days left" (opens Settings › Licence), or in free mode "Free mode · checks only on ⌃⌥G" with Unlock and the Underline tile and Check level locked. Which notice is due is a pure function in Core (`LicenceNotices`); `AppDelegate.showDueLicenceNotices` calls it at launch (after onboarding), on every entitlement or trial-clock change and when onboarding closes. Nothing else nags. **Details (review fixes):** a trial day is stored as the real day, so a clock that jumped forward once doesn't freeze the count (the latest day seen is used only to end the trial); day strings always use a Gregorian calendar (`Calendar.licenceDays`); the Keychain is touched only on `TrialStore.queue`, and demo managers never touch it; the revoked list is stored only after a verified 200 response (a failed download is retried after 10 minutes, at most 1 MB is read) and kept when the key is removed; a `meboki://activate` link never replaces a different working key (Settings › Licence opens with the key in the field, press Activate), and a link that opens the app waits until launch is done (during onboarding it activates silently); the automatic check counts a trial day only when it really asked the model; a review whose popup style no longer matches the effective one ends when the entitlement changes.
-- **Updates:** Sparkle 2 (SwiftPM), wrapped by `UpdateController`. Only a build whose Info.plist has `SUFeedURL` and `SUPublicEDKey` has an updater (`make-app.sh` adds them from `MEBOKI_FEED_URL` / `MEBOKI_UPDATE_KEY`); a plain build never starts Sparkle and hides every update row. One check a day (on by default, nothing about the user is sent), automatic install off by default. A version found by the daily check never opens a window over the app being typed in: a green dot on the menu-bar icon and a popover row, and Sparkle's window on request (popover row, Settings › General or About, right-click › Check for Updates…). With automatic install on, the downloaded update goes in when the app quits or at a quiet moment (`UpdateTiming`: nothing of the app in use, no input for 2 minutes), and the app reopens without opening a window. `Scripts/test-update.sh` runs the whole thing locally. The correction popups carry a green update badge while a newer version waits (`UpdateNudge`): a pill from the day it's found, plus a banner with Install… from day 7. The found day is kept in defaults, so the badge survives relaunches and "Later"; it clears when a check finds the feed offers nothing newer. A click ends the review and opens Sparkle's window. No key reaches it.
-- Target: Apple Silicon, macOS 14+. Releases are Developer ID builds, notarized and stapled, in a signed DMG with an appcast, made by `Scripts/release.sh` (see [docs/releasing.md](docs/releasing.md)) and published as GitHub releases.
+Quick start: `swift build && swift test`, then `Scripts/make-app.sh --install` to try the real app. The rules that matter most: all ranges are UTF-16, never write text you haven't verified, never read secure fields (see [Rules and invariants](#rules-and-invariants)).
+
+### Check flow
+
+- **Hotkey:** **⌃⌥G** checks the focused field, or the selection if there is one.
+- **Automatic check** (`FocusTracker`, needs the local model and "Underline mistakes as I type"): the focused editable text area is checked after a typing pause or on focus. Underlines only; Esc mutes the field until focus moves; ignored fixes stay ignored (`IgnoredFixes`).
+- **Live review:** after a whole-field check with the local model, typing keeps the review: fixes follow the text and edited sentences are checked again after a pause (`CheckScheduler`). With a selection or cloud, typing ends the review.
+- **Fix keys:** ⏎ applies all, ⇧⏎ this one, ⇥ ignores, ← → move, Esc closes. Esc with no popup, or leaving the field, clears the underlines.
+- **Skipped automatically:** single-line fields, apps set to Manual or Off (`AppRules`: terminals and code editors Manual, password managers and remote desktops Off), fields that look like code (`CodeDetector`), and, with "Skip text that isn't English" on, foreign text (`LanguageGate`).
+
+### Reading and writing fields
+
+- Read text, selection and bounds only through `AX.text` / `AX.selection` / `AX.select` / `AX.bounds(el, range, text:)`, never `kAXValueAttribute` directly.
+- Chromium `contenteditable` (x.com, Gmail, Notion, Slack, Obsidian) is measured through its static-text leaves (`TextLeafMap`). Mail compose (WebKit `AXWebArea`) uses text markers and is written by select + paste.
+- Apps that give no text bounds get the card below the field instead of underlines.
+
+### UI
+
+- **Popups** (Settings › General): glass card, anchored bubble, or island (a dark capsule under the menu bar that takes ⏎ ⇧⏎ ⇥ ← → Esc and passes other keys on). Card and bubble show messages and the done line as glass toasts.
+- **Menu bar:** left-click opens the popover (status, Check focused field, Pause in {App}, English, Check level, model row); right-click opens the debug menu.
+- **Settings** (⌘,): General, Appearance (`ColorTone`, `DS.tone`), Writing, Models (local download with SHA-256 check; BYOK cloud), Apps (On / Casual / Manual / Off), Shortcuts, Privacy, Licence, About.
+- **Writing settings:** the English variant (US/UK) picks the prompt once per session. Check for, Casual mode and Protect names/code/links are post-filters on the reply (`EditFilter`), never prompt text.
+- **Onboarding:** first launch opens the Welcome window (Accessibility with a live-detected grant, model download only on button press, sample check). Reopen from the right-click menu or Settings › About.
+- Windows the app opens on its own (notices, updates) never activate it, so the keyboard stays in the app being typed in.
+
+### Models and cloud
+
+- Local models download from pinned Hugging Face commits with SHA-256 (`ModelStore`). `ServerManager` runs `llama-server` on 127.0.0.1 with `-np 4 --kv-unified`, and unloads it when idle or under memory pressure.
+- **Apple Intelligence (macOS 26+):** `ModelSource.apple` checks with Apple's on-device model (`AppleModelClient`, `FoundationModels`): a fresh `LanguageModelSession` per chunk, the same prompt as instructions, greedy, permissive-transformation guardrails; refusals and per-text limits leave the sentence unchanged, a lost model stops the check. On-device, so the automatic check and live review run with it; `llama-server` stops. Which backend a check uses is `ModelBackend.choose` (Core); `AppDelegate.checkBackend()` is the one factory. A fresh install (nothing stored, onboarding not done) starts on Apple's model where it is available (`Catalog.appleIsDefault`); a stored choice never changes by itself, and an unavailable Apple model is reported, not swapped. The framework is weak-linked: everything behind `#if canImport(FoundationModels)` and `#available(macOS 26, *)`, so the app runs on macOS 14 and 15. DEBUG: `--apple-model <state>` or `MEBOKI_APPLE_MODEL=<state>` forces the availability (available, notEnabled, modelNotReady, deviceNotEligible, osTooOld) in the app and the demos; a forced "available" on macOS 14/15 fails at check time with a message. Not benchmarked yet: `Scripts/make-bench-kit.sh` builds the kit for a macOS 26 Mac, `eval/bench_remote.py` scores what comes back.
+- **Cloud (BYOK, opt-in):** with a key saved and **Use** pressed, checks go to OpenRouter or OpenAI through the Responses API (`ResponsesClient`) and `llama-server` stops. The UI shows a cloud symbol and the provider name.
+- Long fields: benchmark page `docs/bench/long-field-300-fixes.html` (first check ~4 s, Apply all ~28 s). Apply all writes one group per paragraph run; `KeyGuard` holds keys while fixes are written.
+
+### Licence
+
+- 7-day trial (active days only), then free mode: the hotkey check with every model stays free; automatic check, bubble and island, Check level and Casual mode need a licence. Keys are checked offline (Ed25519, `LicenceKey`).
+- `LicenceManager` joins the stored key, the revoked list and the trial clock into an `Entitlement`. **The check flow must read the `effective…` settings** (`effectivePopupStyle`, `effectiveCheckLevel`, `effectiveCasualMode`, `effectiveUnderlineAsYouType`, `effectiveAppMode(_:)`), never the stored ones. In free mode Settings keeps the stored values, dimmed with a lock.
+- `meboki://activate?key=…` activates a key (`AppDelegate.handleActivationURL`) but never replaces a different working key.
+- Notices: which one is due is a pure function in Core (`LicenceNotices`), shown by `AppDelegate.showDueLicenceNotices`. One Trial ended window, one per revoked or expired key, one last-day toast. Nothing else nags.
+- Network: only a daily GET of the public revoked list, and only with a licence installed. Keychain access only on `TrialStore.queue`.
+- DEBUG builds accept keys signed with the test signing key; release builds never do.
+
+### Updates
+
+- Sparkle 2, wrapped by `UpdateController`. Only a build whose Info.plist has `SUFeedURL` and `SUPublicEDKey` has an updater (`make-app.sh` adds them from `MEBOKI_FEED_URL` / `MEBOKI_UPDATE_KEY`); a plain build never starts Sparkle.
+- One check a day, automatic install off by default. A found version shows as a dot on the menu-bar icon and a popover row, never as a window. Automatic install waits for a quiet moment (`UpdateTiming`).
+- The correction popups carry a green update badge while a newer version waits (`UpdateNudge`): a pill from the day it's found, plus a banner with Install… from day 7. The found day is kept in defaults, so the badge survives relaunches and "Later"; it clears when a check finds the feed offers nothing newer. A click ends the review and opens Sparkle's window. No key reaches it.
+- Releases are Developer ID builds, notarized and stapled, in a signed DMG with an appcast, made by `Scripts/release.sh` and published as GitHub releases. See [docs/releasing.md](docs/releasing.md).
 
 ## Documents
 
@@ -47,8 +86,8 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Onboarding/OnboardingDemo.swift     DEBUG `--onboarding-demo <step> [--dark] [--trusted] [--downloading]` for screenshots
   Settings/AppSettings.swift    UserDefaults-backed settings (popup style, writing options, appModes, checkedApps, hotkey, logSnippets, showInMenuBar, …)
   Licence/LicenceManager.swift  licence state (`entitlement`: licensed / trial / free), activation, `recordCheck` per real check, daily revoked-list fetch, `transitions`; Licence/LicenceStore (key + revoked list files), TrialStore (Keychain + UserDefaults), LicenceCLI (DEBUG `--licence-status`, `--verify-licence <key>`)
-  Licence/LicenceDebug.swift    DEBUG: `DebugClock` (the licence manager's clock = real time + an offset kept in UserDefaults), `DebugSigner` (signs test keys and revoked lists with the test-payment key read from the login Keychain, `meboki` / `app-license-sandbox-private-key`)
-  Settings/Panes/DebugPane.swift  DEBUG: Settings › Debug: live licence status; trial presets (past days, last day, end), clock jumps (23:59:50, +1 h, +1 day, real time), onboarding reset (+ open), test keys (activate, corporate ending tomorrow, copy, activation link), revoke / clear / fetch the revoked list. Build with `Scripts/make-app.sh --debug --install`
+  Licence/LicenceDebug.swift    DEBUG: `DebugClock` (real time + an offset in UserDefaults), `DebugSigner` (test keys and revoked lists, signed with the test signing key from the login Keychain)
+  Settings/Panes/DebugPane.swift  DEBUG: Settings › Debug: licence status, trial presets, clock jumps, onboarding reset, test keys, revoked-list tools (`make-app.sh --debug --install`)
   Licence/TrialEndedWindow.swift  the one-time notice window (trial ended / key no longer valid), `TrialEndedView`, `TrialEndedWindowController` (shown without activating)
   Licence/LicenceDemo.swift     DEBUG demos: `LicenceDemo` (own manager forced into a state), `TrialEndedDemo`, `PopoverDemo`, `DemoSnapshot`
   Settings/APIKeyStore.swift    BYOK API keys in the login Keychain (one item per provider)
@@ -57,7 +96,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Settings/SettingsComponents.swift  group, row, key field, footnote, app icon
   Settings/Panes/*.swift        General (style picker art, hotkey field), Appearance (tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts, Privacy, Licence (status card, buy, key field, remove), About
   Settings/LicenceLock.swift    free-mode lock marks: `LicenceGate` (environment), `.licenceLocked(_:caption:)`, `NeedsLicencePopover`, `FreeModeBanner`; `DSSegmented(locked:onLockedTap:)`
-  Settings/SettingsDemo.swift   (see also the DEBUG demo flags below) DEBUG `--settings-demo <pane> [--dark] [--recording] [--bubble] [--licence-state trial|trialFresh|lastDay|free|licensed|revoked]` for screenshots (own licence manager, temp folder, demo Keychain service)
+  Settings/SettingsDemo.swift   DEBUG `--settings-demo <pane>` for screenshots (see the demo flags under Commands)
   Updates/UpdateController.swift  Sparkle wrapper: on only with a feed in Info.plist, gentle reminder state (`available`, `needsAttention`), the two switches, install at a quiet moment; DEBUG `MEBOKI_DEMO_UPDATE=<version>` (+ `MEBOKI_DEMO_UPDATE_DAYS=<n>`) fakes a found version for the demo flags and `--demo-popups --all`
   MenuBar/StatusItem.swift      status icon: left-click popover, right-click debug menu, icon states (checking, paused, update waiting, open)
   MenuBar/PopoverView.swift     menu-bar popover view + PopoverPanel (non-activating, under the icon): status, check button, tiles, model row
@@ -83,7 +122,7 @@ Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   PostFilter.swift              clean wrappers, similarity guard (Ratcliff/Obershelp = difflib), style-only filter
   Diff.swift                    word-level diff → UTF-16 `Edit`s
   ProofreadEngine.swift         ProofreadEngine: paragraph chunks → model → filters → edits
-  CheckPipeline.swift           Milestone B: sentence cache (only changed sentence runs go to the model), cursor-first order, scope; CheckScheduler (typing pause, stale-pass cancel)
+  CheckPipeline.swift           sentence cache (only changed sentence runs go to the model), cursor-first order, scope; CheckScheduler (typing pause, stale-pass cancel)
   FixList.swift                 fixes in any order (UTF-16 range shifting), n of N, card swap text and underline range (FixDisplay); live review: textEdited, reconcile; Apply all groups (one write per paragraph run)
   IgnoredFixes.swift            fixes the user ignored, by sentence, so later checks leave them out
   TextChange.swift              one contiguous change between two field values (common prefix/suffix, surrogate-safe)
@@ -111,8 +150,9 @@ Scripts/make-app.sh             build + bundle (llama-server, Sparkle.framework)
 Scripts/make-art.sh             renders App/Art/AppIcon.svg → AppIcon.icns and dmg-background.svg → .tiff (1x + 2x); outputs committed, needs rsvg-convert
 Scripts/make-dmg.sh             styled DMG (background, app left, Applications right, no toolbar) via dmgbuild in build/.dmg-venv; no Finder scripting
 Scripts/test-update.sh          local updater test: old build + newer build signed with a throwaway key + a feed on 127.0.0.1:8765 (build/update-test/)
-Scripts/release.sh              official release: Developer ID build with the updater (feed https://meboki.com/api/appcast.xml), notarized + stapled app and DMG, appcast.xml signed with the keychain update key (account meboki); --publish tags and creates the GitHub release (mebokihq/meboki)
-eval/                           Python benchmark (stdlib only) + results; eval/filter = Swift tool that scores the settings with Core
+Scripts/release.sh              official release: Developer ID build with the updater, notarized + stapled app and DMG, signed appcast.xml; --publish creates the GitHub release (docs/releasing.md)
+eval/                           Python benchmark (stdlib only) + results; eval/filter = Swift tool that scores the settings with Core; eval/runner = `meboki-eval-run` (Apple's model or llama-server, timed, for the bench kit)
+Scripts/make-bench-kit.sh       bench kit for a macOS 26 Mac without Xcode or Python (runner + cases + Scripts/bench-kit/run-apple.sh, run-gemma.sh) → build/meboki-bench-kit.zip
 docs/bench/                     long-field benchmark page
 ```
 
@@ -122,7 +162,7 @@ Runtime paths: models in `~/Library/Application Support/Meboki/Models/`, logs in
 
 ## Commands
 
-DEBUG demo flags (own defaults suite and demo Keychain service, never the real state): `--settings-demo <pane> [--dark] [--licence-state trial|trialFresh|lastDay|free|licensed|revoked]`, `--onboarding-demo <step> [--trusted] [--no-model] [--licence-state …]`, `--popover-demo [--licence-state …] [--dark]`, `--trial-ended-demo [--revoked|--expired] [--dark]`. With `MEBOKI_DEMO_SNAPSHOT=<file.png>` the onboarding, popover and notice demos draw their window into that file and quit (works with the screen locked).
+DEBUG demo flags (own defaults suite and demo Keychain service, never the real state): `--settings-demo <pane> [--dark] [--licence-state trial|trialFresh|lastDay|free|licensed|revoked]`, `--onboarding-demo <step> [--trusted] [--no-model] [--licence-state …]`, `--popover-demo [--licence-state …] [--dark]`; each takes `--apple-model <state>` and `--use-apple` for Apple's built-in model, `--trial-ended-demo [--revoked|--expired] [--dark]`. With `MEBOKI_DEMO_SNAPSHOT=<file.png>` the onboarding, popover and notice demos draw their window into that file and quit (works with the screen locked).
 
 ```sh
 swift build                                   # app + core
@@ -133,6 +173,7 @@ Scripts/make-app.sh --install                 # build, sign, install, launch
 Scripts/release.sh 1.0.1 2 --publish          # notarized DMG + appcast → GitHub release (clean tree needed)
 python3 eval/bench_ls.py eval/results_text <label> <model.gguf>   # benchmark a GGUF (see eval/README.md)
 python3 eval/guard.py eval/results_text       # scores after post-filters
+python3 eval/false_fixes_report.py            # known wrong suggestions stay fixed (no model); add a line per new one
 python3 eval/settings_report.py eval/results_settings   # settings (US/UK, level, casual, protect) via Core
 python3 eval/language_report.py               # language gate: English never left out, foreign left out (no model)
 python3 eval/code_report.py                   # code detector: prose never taken for code, source files are (no model)
@@ -143,7 +184,7 @@ Run `swift build` and `swift test` after every change. For app changes, also run
 
 ## Rules and invariants
 
-- **Eval gate:** any change to the prompt, post-filters, or model files needs an `eval/` run. Compare with `eval/results_text/` and record the numbers with the change.
+- **Eval gate:** any change to the prompt, post-filters, or model files needs an `eval/` run. Compare with `eval/results_text/` and record the numbers with the change. `eval/false_fixes_report.py` must stay all ok; every wrong suggestion found gets a line in `eval/false_fixes.jsonl`.
 - **Keep `Prompt.system` byte-identical** across requests. llama-server reuses its cached prefix, so only the user text is processed. Per-user settings (US/UK) go in once per session, never per request (`Prompt.system(for:)`). Per-app settings (Casual), the check level and protected tokens are post-filters (`EditFilter`), never prompt text.
 - **All ranges are UTF-16 `NSRange`**, because the Accessibility API uses UTF-16. Emoji break anything else.
 - **Never write text you haven't verified.** `AX.replace` checks the original is still at the range before writing, proves the selection (`AX.select(el, range, in:)`: the selected text must be the original; Chrome's selection read-back lies), and checks the prefix after. The paste fallback runs only when the field is unchanged, still focused, and its app is frontmost. Truncated or too-different model replies are rejected. Don't weaken these checks.

@@ -3,9 +3,10 @@ import Combine
 import MebokiCore
 import SwiftUI
 
-/// Onboarding pages (PLAN.md §7 Phase 1 "Onboarding window"), in order.
+/// Onboarding pages (PLAN.md §7 Phase 1 "Onboarding window"), in order. The model comes before Accessibility:
+/// a download can run while the permission is given, and the Accessibility page can't be skipped.
 enum OnboardingStep: Int, CaseIterable {
-    case welcome, access, model, tryIt, popup, done
+    case welcome, model, access, tryIt, popup, done
 }
 
 /// Where checks stand, for the model and "Try it" pages (set by `AppDelegate.refreshStatus`).

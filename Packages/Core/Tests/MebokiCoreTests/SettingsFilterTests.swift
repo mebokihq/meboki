@@ -108,6 +108,112 @@ func fixed(_ input: String, _ output: String, _ options: CheckOptions) -> String
         #expect(fixed("If I was you, I would apologize.", "If I were you, I would apologise.", CheckOptions(variant: .uk))
             == "If I were you, I would apologize.")
     }
+
+    /// The English switcher picks the prompt; a correct word is never respelled into the other variant,
+    /// whichever variant is selected and in either direction.
+    @Test func respellingDroppedWithBothSwitcherSettings() {
+        for v in EnglishVariant.allCases {
+            let o = CheckOptions(variant: v)
+            #expect(fixed("Our colour is grey.", "Our color is gray.", o) == "Our colour is grey.", "\(v)")
+            #expect(fixed("Our color is gray.", "Our colour is grey.", o) == "Our color is gray.", "\(v)")
+            #expect(fixed("We organise teh centre.", "We organize the center.", o) == "We organise the centre.", "\(v)")
+            // A real typo next to it is still fixed.
+            #expect(fixed("The colur is nice.", "The colour is nice.", o) == "The colour is nice.", "\(v)")
+        }
+    }
+}
+
+@Suite struct NoiseFilterTests {
+    let o = CheckOptions()
+
+    @Test func numbersAreNeverChanged() {
+        #expect(fixed("I got 500,000+ impressions.", "I got 500 000+ impressions.", o) == "I got 500,000+ impressions.")
+        #expect(fixed("I got 500,000+ impressions.", "I got 500,000 impressions.", o) == "I got 500,000+ impressions.")
+        #expect(fixed("I have 2 cats.", "I have two cats.", o) == "I have 2 cats.")
+        #expect(fixed("On the 1st day.", "On the first day.", o) == "On the 1st day.")
+        #expect(fixed("Pages 5-6 are done.", "Pages 5–6 are done.", o) == "Pages 5-6 are done.")
+        #expect(fixed("It costs $5.", "It costs 5$.", o) == "It costs $5.")
+        #expect(fixed("Meet at 10:30.", "Meet at 10.30.", o) == "Meet at 10:30.")
+        // Fixes around numbers stay.
+        #expect(fixed("I has 3 cat.", "I have 3 cats.", o) == "I have 3 cats.")
+        #expect(fixed("In 2024 we met them.", "In 2024, we met them.", o) == "In 2024, we met them.")
+    }
+
+    /// The parts of one edit aren't always independent: dropping one must not leave text that writes twice.
+    @Test func unitSpacingIsDroppedWhole() {
+        #expect(fixed("We need 10kg of flour.", "We need 10 kg of flour.", o) == "We need 10kg of flour.")
+        #expect(fixed("It has 5GB free.", "It has 5 GB free.", o) == "It has 5GB free.")
+        #expect(fixed("I paid 5pm yesterday, we was late.", "I paid 5 pm yesterday, we were late.", o)
+            == "I paid 5pm yesterday, we were late.")
+    }
+
+    @Test func fixesThatCarryTheNumberOverStay() {
+        #expect(fixed("The 1990's were great.", "The 1990s were great.", o) == "The 1990s were great.")
+        #expect(fixed("A 5 year old boy.", "A 5-year-old boy.", o) == "A 5-year-old boy.")
+        #expect(fixed("Covid 19 hit us.", "COVID-19 hit us.", o) == "COVID-19 hit us.")
+    }
+
+    @Test func chatDigitsUsedAsWords() {
+        #expect(fixed("I want 2 go home.", "I want to go home.", o) == "I want to go home.")
+        #expect(fixed("Thanks 4 the help.", "Thanks for the help.", o) == "Thanks for the help.")
+        #expect(fixed("Me 2 want it.", "Me too want it.", o) == "Me too want it.")
+        // A real count is never a word.
+        #expect(fixed("I have 2 cats.", "I have two cats.", o) == "I have 2 cats.")
+        #expect(fixed("Page 4.", "Page for.", o) == "Page 4.")
+    }
+
+    @Test func keepPartsDropsAOneSidedNeighbourOfADroppedPart() {
+        let chunk = "We need 10kg of flour."
+        let e = Edit(range: NSRange(location: 8, length: 5), original: "10kg ", replacement: "10 kg ")
+        // Keep everything but the "10kg" → "10" part: the inserted "kg " goes with it.
+        let kept = EditFilter.keepParts(of: e, in: chunk) { $0.original != "10kg" }
+        #expect(kept.isEmpty)
+        // Independent parts one space apart: the other one stays.
+        let chunk2 = "I don't knw."
+        let e2 = Edit(range: NSRange(location: 2, length: 9), original: "don't knw", replacement: "don’t know")
+        let kept2 = EditFilter.keepParts(of: e2, in: chunk2) { $0.original != "don't" }
+        #expect(kept2.map(\.replacement) == ["know"])
+    }
+
+    @Test func keepingStyleTakesTheWritersTypography() {
+        #expect(EditFilter.keepingStyle(original: "I dont know \"it\" .", corrected: "I don’t know “it”.")
+            == "I don’t know \"it\".")
+        #expect(EditFilter.keepingStyle(original: "I came - and left.", corrected: "I came — and left.") == "I came - and left.")
+        #expect(EditFilter.keepingStyle(original: "We was here.", corrected: "We were here.") == "We were here.")
+    }
+
+    @Test func secondReviewCases() {
+        #expect(fixed("i has 10kg flour.", "I have 10 kg flour.", o) == "I have 10kg flour.")
+        #expect(fixed("its 2 late for us.", "it's too late for us.", o) == "it's too late for us.")
+        #expect(fixed("2 much salt here.", "Too much salt here.", o) == "Too much salt here.")
+        #expect(fixed("Score: 5 🎉3 points", "Score: 5 🎉 3 points", o) == "Score: 5 🎉3 points")
+        #expect(fixed("Wait… we was here.", "Wait we were here.", o) == "Wait… we were here.")
+        #expect(fixed("Wait... we were here.", "Wait… we were here.", o) == "Wait... we were here.")
+        #expect(fixed("It was 5 - the best day.", "It was 5 – the best day.", o) == "It was 5 - the best day.")
+        #expect(fixed("We left. Then we eat.", "We left. then we ate.", o) == "We left. Then we ate.")
+        // Joins and abbreviations keep their lowercase start.
+        #expect(fixed("I went home. And then I slep.", "I went home, and then I slept.", o) == "I went home, and then I slept.")
+        #expect(fixed("Bring fruit, e.g. Apples and pear.", "Bring fruit, e.g. apples and pears.", o)
+            == "Bring fruit, e.g. apples and pears.")
+    }
+
+    @Test func quoteStyleOnlyIsDropped() {
+        #expect(fixed("I don't know.", "I don’t know.", o) == "I don't know.")
+        #expect(fixed("He said \"hi\" to me.", "He said “hi” to me.", o) == "He said \"hi\" to me.")
+        // A missing apostrophe is still a fix, in either style.
+        #expect(fixed("I dont know.", "I don’t know.", o) == "I don’t know.")
+        // Mixed: the quote change goes, the real fix stays.
+        #expect(fixed("I don't knw.", "I don’t know.", o) == "I don't know.")
+    }
+
+    @Test func spacingOnlyIsDropped() {
+        #expect(fixed("Hello  world, we was here.", "Hello world, we were here.", o) == "Hello  world, we were here.")
+        #expect(fixed("One line\nsecond line.", "One line second line.", o) == "One line\nsecond line.")
+        // Spacing that changes the words or punctuation is a real fix.
+        #expect(fixed("I like it alot.", "I like it a lot.", o) == "I like it a lot.")
+        #expect(fixed("It ends.Then more.", "It ends. Then more.", o) == "It ends. Then more.")
+        #expect(fixed("Wait , what?", "Wait, what?", o) == "Wait, what?")
+    }
 }
 
 @Suite struct CasualAndSlangTests {

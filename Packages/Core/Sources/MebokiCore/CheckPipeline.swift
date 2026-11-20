@@ -73,6 +73,11 @@ public actor CheckPipeline {
         languageCache.removeAll()
     }
 
+    /// Tests: puts a correction for `text` (one sentence or a unit) straight into the cache.
+    func seed(_ text: String, _ corrected: String, variant: EnglishVariant = .us) {
+        cache.set(Cache.Key(variant: variant, text: text), .corrected(corrected), capacity: cacheCapacity)
+    }
+
     private func isForeign(_ blanked: String) -> Bool {
         if let known = languageCache[blanked] { return known }
         let foreign = LanguageGate.foreignLanguage(blanked) != nil
@@ -93,11 +98,15 @@ public actor CheckPipeline {
         /// Most text (UTF-16) one pass looks at, counted by whole paragraphs in check order. The cursor's
         /// paragraph is always included.
         public var maxLength: Int
+        /// The check follows typing: a word the caret sits right after may still be half typed ("Li" on the
+        /// way to "Like"), so no fix touches it (`wordBeingTyped`). Off for ⌃⌥G and focus checks.
+        public var typing: Bool
 
-        public init(cursor: Int? = nil, visible: NSRange? = nil, maxLength: Int = 20_000) {
+        public init(cursor: Int? = nil, visible: NSRange? = nil, maxLength: Int = 20_000, typing: Bool = false) {
             self.cursor = cursor
             self.visible = visible
             self.maxLength = maxLength
+            self.typing = typing
         }
     }
 
@@ -271,11 +280,21 @@ public actor CheckPipeline {
             var corrected = ""
             var pos = pr.location
             var unusable = false
-            for u in units {
-                let r = NSUnionRange(sentences[u.sentences.lowerBound], sentences[u.sentences.upperBound])
+            // Each unit's text as written and as it goes into `corrected` (as written unless corrected).
+            let unitRanges = units.map { NSUnionRange(sentences[$0.sentences.lowerBound], sentences[$0.sentences.upperBound]) }
+            let written = unitRanges.map { ns.substring(with: $0) }
+            let fixed = units.indices.map { i -> String in
+                if case .corrected(let t)? = units[i].entry { return t }
+                return written[i]
+            }
+            for (i, u) in units.enumerated() {
+                let r = unitRanges[i]
                 corrected += ns.substring(with: NSRange(location: pos, length: r.location - pos))
                 switch u.entry {
-                case .corrected(let t)?: corrected += t
+                case .corrected(let t)?:
+                    corrected += i + 1 < units.count
+                        ? Self.keepingSentenceEnd(written[i], t, nextWritten: written[i + 1], nextFixed: fixed[i + 1])
+                        : t
                 case .rejected?: unusable = true; corrected += ns.substring(with: r)
                 case nil:
                     if !failed.isDisjoint(with: u.sentences) { unusable = true }
@@ -290,9 +309,11 @@ public actor CheckPipeline {
                 let foreignRanges = foreign.sorted().map {
                     NSRange(location: sentences[$0].location - pr.location, length: sentences[$0].length)
                 }
+                let typed = scope.typing ? scope.cursor.flatMap { Self.wordBeingTyped(in: ns, caret: $0) } : nil
                 found[p] = ProofreadEngine.edits(chunk: chunk, corrected: corrected, options: options,
                                                  protected: ProtectedTokens.clip(protected, to: pr), foreign: foreignRanges)
                     .map { var e = $0; e.range.location += pr.location; return e }
+                    .filter { e in typed.map { !Self.touchesWord(e.range, $0) } ?? true }
             }
             covered.append(pr)
             partial?(result(complete: false))
@@ -378,6 +399,60 @@ public actor CheckPipeline {
         return units
     }
 
+    /// The word the caret sits right after (letters, digits, apostrophes, hyphens), when nothing word-like
+    /// follows the caret: the word that may still be being typed. Nil when the caret is after a space or
+    /// punctuation, or inside a word.
+    static func wordBeingTyped(in ns: NSString, caret: Int) -> NSRange? {
+        guard caret > 0, caret <= ns.length else { return nil }
+        func isWord(_ i: Int) -> Bool {
+            guard let u = UnicodeScalar(ns.character(at: i)) else { return true }  // a surrogate half: emoji or rare letter
+            return CharacterSet.alphanumerics.contains(u) || "'’-_".unicodeScalars.contains(u)
+        }
+        guard isWord(caret - 1), caret == ns.length || !isWord(caret) else { return nil }
+        var start = caret - 1
+        while start > 0, isWord(start - 1) { start -= 1 }
+        return NSRange(location: start, length: caret - start)
+    }
+
+    /// True when an edit's range changes the word or adds text right next to it.
+    static func touchesWord(_ range: NSRange, _ word: NSRange) -> Bool {
+        range.location <= NSMaxRange(word) && NSMaxRange(range) >= word.location
+    }
+
+    /// A cached unit's correction with its sentence end put back when the model dropped it but the next
+    /// sentence still starts as written. Dropping the period only makes sense together with a change at the
+    /// next sentence's start ("product. like" → "product like"); the cache keeps each sentence's half of such
+    /// a fix on its own, so once the next sentence changes and is checked again, the dropped period would
+    /// otherwise come back alone ("product. Like" → "product Like"). `written`/`fixed`: the unit as written
+    /// and as cached; `nextWritten`/`nextFixed`: the unit after it in the same paragraph.
+    static func keepingSentenceEnd(_ written: String, _ fixed: String, nextWritten: String, nextFixed: String) -> String {
+        // The next sentence's start changed too ("Like" → "like", "\"Like" → "\"like"): a real join, leave it.
+        // Compared on the first letter or digit, so a leading quote or bracket doesn't hide the change.
+        let a = nextWritten.first { $0.isLetter || $0.isNumber }
+        let b = nextFixed.first { $0.isLetter || $0.isNumber }
+        guard let first = a, b == first else { return fixed }
+        return restoringEnd(written, fixed)
+    }
+
+    /// `fixed` with the sentence end of `written` put back when the model dropped it (or put a comma or
+    /// semicolon in its place). Used when a unit is cached: a unit never ends inside a join (`store` joins the
+    /// sentences a fix spans), so a dropped end there is never part of a fix. Otherwise the cache would keep
+    /// it, and a later reply for the next sentence that lowercases its start would turn it into a join the
+    /// model never proposed ("early. Then" → "early then").
+    static func restoringEnd(_ written: String, _ fixed: String) -> String {
+        let enders = CharacterSet(charactersIn: ".!?…")
+        let w = written.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ending = String(String.UnicodeScalarView(w.unicodeScalars.reversed().prefix { enders.contains($0) }.reversed()))
+        guard !ending.isEmpty else { return fixed }
+        // Trailing whitespace of the correction stays where it is.
+        let body = fixed.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+        let tail = String(fixed.dropFirst(body.count))
+        guard let last = body.unicodeScalars.last, !enders.contains(last) else { return fixed }
+        // A comma or semicolon the model put in place of the period goes too.
+        let kept = body.replacingOccurrences(of: "[,;:]+$", with: "", options: .regularExpression)
+        return kept + ending + tail
+    }
+
     /// Runs of uncached sentences next to each other: one request each. The run at (or nearest) the
     /// cursor goes first.
     static func missingRuns(_ units: [Unit], sentences: [NSRange], cursor: Int?) -> [ClosedRange<Int>] {
@@ -418,7 +493,10 @@ public actor CheckPipeline {
             let spanText = ns.substring(with: span)
             // Relative to the span.
             let local = run.map { NSRange(location: sentences[$0].location - span.location, length: sentences[$0].length) }
-            let edits = Diff.edits(from: spanText, to: fixed, merge: false)
+            // Merged: changes one space apart are one edit, so a change at a sentence's end together with one
+            // at the next sentence's start ("product. Like" → "product like") is one edit across the boundary.
+            // Cached apart, each half would later come back alone ("product. Like" → "product Like").
+            let edits = Diff.edits(from: spanText, to: fixed, merge: true)
             // Each edit belongs to the sentences it touches (first...last); an edit in the space between
             // two sentences, or across it, joins them into one unit.
             var joinsNext = [Bool](repeating: false, count: local.count)
@@ -430,6 +508,17 @@ public actor CheckPipeline {
                 for k in first..<last { joinsNext[k] = true }
                 owner.append(first)
             }
+            // Two edits with only spaces, quotes or brackets between them, in neighbouring sentences, are one
+            // join too ("left. \"Like" → "left, \"like": the quote keeps the diff from merging them).
+            let spanNS = spanText as NSString
+            for (e, f) in zip(edits, edits.dropFirst()) {
+                let gap = NSRange(location: NSMaxRange(e.range), length: f.range.location - NSMaxRange(e.range))
+                guard gap.length >= 0, NSMaxRange(gap) <= spanNS.length,
+                      spanNS.substring(with: gap).allSatisfy({ !$0.isLetter && !$0.isNumber }) else { continue }
+                let a = local.firstIndex { NSMaxRange($0) >= NSMaxRange(e.range) } ?? local.count - 1
+                let b = local.lastIndex { $0.location <= f.range.location } ?? 0
+                for k in a..<max(a, b) { joinsNext[k] = true }
+            }
             var k = 0
             while k < local.count {
                 var m = k
@@ -439,7 +528,7 @@ public actor CheckPipeline {
                     .map { var e = edits[$0]; e.range.location -= unit.location; return e }
                 let original = (spanText as NSString).substring(with: unit)
                 let abs = NSRange(location: unit.location + span.location, length: unit.length)
-                put(abs, .corrected(Diff.apply(inside, to: original)))
+                put(abs, .corrected(Self.restoringEnd(original, Diff.apply(inside, to: original))))
                 k = m + 1
             }
         }

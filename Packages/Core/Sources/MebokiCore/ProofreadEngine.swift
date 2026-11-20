@@ -67,7 +67,8 @@ public struct ProofreadEngine: Sendable {
     /// English (`LanguageGate`); edits that touch them are dropped whatever the settings.
     public static func edits(chunk: String, corrected fixed: String, options: CheckOptions,
                              protected: [NSRange]? = nil, foreign: [NSRange] = []) -> [Edit] {
-        let target = options.casual ? EditFilter.casualText(original: chunk, corrected: fixed) : fixed
+        let styled = EditFilter.keepingStyle(original: chunk, corrected: fixed)
+        let target = options.casual ? EditFilter.casualText(original: chunk, corrected: styled) : styled
         let raw = Diff.edits(from: chunk, to: target).filter { !ProtectedTokens.touches($0.range, foreign) }
         let prot = options.protectTokens ? (protected ?? ProtectedTokens.ranges(in: chunk)) : []
         let kept = EditFilter.apply(raw, in: chunk, options: options, protected: prot)

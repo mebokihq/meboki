@@ -96,6 +96,17 @@ private let fixes = [("We was", "We were"), ("tomorow", "tomorrow"), ("dont", "d
         #expect(Diff.apply(r2.edits, to: t2) == "I went home, and then I slept. It was very late.")
     }
 
+    @Test func boundaryFixJoinsTheSentencesInTheCache() async throws {
+        let fake = FakeCorrector([("home. And then", "home, and then")])
+        let pipe = CheckPipeline(client: fake)
+        _ = try await pipe.check("I went home. And then I slept. It was late.")
+        // Editing the second half of the join sends both sentences, not the first one's half alone.
+        let t = "I went home. And then I slept well. It was late."
+        let r = try await pipe.check(t)
+        #expect(r.requests == 1 && fake.calls.last == "I went home. And then I slept well.")
+        #expect(Diff.apply(r.edits, to: t) == "I went home, and then I slept well. It was late.")
+    }
+
     @Test func rejectedReplyIsRemembered() async throws {
         let fake = FakeCorrector(fixes)
         fake.garbageIfContains = "services"
@@ -172,6 +183,106 @@ private let fixes = [("We was", "We were"), ("tomorow", "tomorrow"), ("dont", "d
         #expect(c.count <= 8)
         #expect(c.get(.init(variant: .us, text: "s9")) != nil)
         #expect(c.get(.init(variant: .us, text: "s0")) == nil)
+    }
+
+    /// The model joined two sentences ("product. Like" → "product like"); each sentence's half is cached on its
+    /// own. Once the second sentence changes, the cached first half must not drop the period alone.
+    @Test func joinedSentencesAreCachedAsOneUnit() async throws {
+        let first = "Reply with your product. Like the ones you likes."
+        let fake = FakeCorrector([("product. Like the ones you likes.", "product like the ones you like.")])
+        let pipe = CheckPipeline(client: fake)
+        let r1 = try await pipe.check(first)
+        #expect(Diff.apply(r1.edits, to: first) == "Reply with your product like the ones you like.")
+        // Editing the second sentence sends both again: the join was one fix.
+        let second = "Reply with your product. Like the ones you like."
+        let r2 = try await pipe.check(second)
+        #expect(fake.calls.last == second)
+        #expect(r2.edits.isEmpty)
+    }
+
+    /// The cache holds a sentence whose correction dropped its period (a reply from before the join rule,
+    /// or a split it doesn't catch): with the next sentence as written, the period comes back.
+    @Test func cachedHalfOfAJoinKeepsTheSentenceEnd() async throws {
+        let fake = FakeCorrector([("Reply with your product.", "Reply with your product")])
+        let pipe = CheckPipeline(client: fake)
+        // Cached alone ("Reply with your product." → without its period): judged style-only, so seed directly.
+        await pipe.seed("Reply with your product.", "Reply with your product")
+        let text = "Reply with your product. Like the ones you like."
+        let r = try await pipe.check(text)
+        #expect(fake.calls == ["Like the ones you like."])
+        #expect(r.edits.isEmpty)
+    }
+
+    /// The model dropped a period without joining (no lowercase start): the guard keeps it, in the same pass
+    /// and once the sentence is cached alone.
+    @Test func droppedPeriodWithoutJoinIsPutBack() async throws {
+        let first = "Reply with your product. Like the ones you likes."
+        let fake = FakeCorrector([(first, "Reply with your product Like the ones you like.")])
+        let pipe = CheckPipeline(client: fake)
+        let r1 = try await pipe.check(first)
+        #expect(Diff.apply(r1.edits, to: first) == "Reply with your product. Like the ones you like.")
+        let second = "Reply with your product. Like the ones you like."
+        let r2 = try await pipe.check(second)
+        #expect(r2.edits.isEmpty)
+    }
+
+    /// A dropped period is never cached: a later reply that lowercases the next sentence can't turn it into
+    /// a join the model never proposed.
+    @Test func droppedPeriodIsNotCached() async throws {
+        let fake = FakeCorrector([("We left early. Then Mary came.", "We left early Then Mary came."),
+                                  ("Then Mary came hom.", "then Mary came home.")])
+        let pipe = CheckPipeline(client: fake)
+        _ = try await pipe.check("We left early. Then Mary came.")
+        let t = "We left early. Then Mary came hom."
+        let r = try await pipe.check(t)
+        #expect(fake.calls.last == "Then Mary came hom.")
+        #expect(Diff.apply(r.edits, to: t) == "We left early. Then Mary came home.")
+    }
+
+    /// While typing, the word the caret sits right after may be half typed: no fix touches it.
+    @Test func wordBeingTypedGetsNoFix() async throws {
+        let text = "We was here. Reply with your Li"
+        let fake = FakeCorrector([("We was", "We were"), ("your Li", "your Lie.")])
+        let pipe = CheckPipeline(client: fake)
+        let caret = (text as NSString).length
+        let typing = try await pipe.check(text, scope: .init(cursor: caret, typing: true))
+        #expect(Diff.apply(typing.edits, to: text) == "We were here. Reply with your Li")
+        // ⌃⌥G (not typing) fixes it.
+        let hotkey = try await pipe.check(text, scope: .init(cursor: caret))
+        #expect(Diff.apply(hotkey.edits, to: text) == "We were here. Reply with your Lie.")
+        // Caret after a space: the word is done.
+        let done = text + " "
+        let after = try await CheckPipeline(client: FakeCorrector([("your Li", "your Lie.")]))
+            .check(done, scope: .init(cursor: (done as NSString).length, typing: true))
+        #expect(Diff.apply(after.edits, to: done) == "We was here. Reply with your Lie. ")
+    }
+
+    @Test func wordBeingTypedRange() {
+        let ns = "Hi teh wor" as NSString
+        #expect(CheckPipeline.wordBeingTyped(in: ns, caret: 10) == NSRange(location: 7, length: 3))
+        #expect(CheckPipeline.wordBeingTyped(in: ns, caret: 6) == NSRange(location: 3, length: 3))
+        #expect(CheckPipeline.wordBeingTyped(in: ns, caret: 5) == nil)  // inside "teh"
+        #expect(CheckPipeline.wordBeingTyped(in: ns, caret: 7) == nil)  // after a space
+        #expect(CheckPipeline.wordBeingTyped(in: ns, caret: 0) == nil)
+    }
+
+    @Test func keepingSentenceEnd() {
+        let keep = CheckPipeline.keepingSentenceEnd
+        // Dropped period, next sentence as written: put back.
+        #expect(keep("Reply with your product.", "Reply with your product", "Like it.", "Like it.") == "Reply with your product.")
+        #expect(keep("Is it yours?", "Is it yours", "Send it.", "Send it.") == "Is it yours?")
+        #expect(keep("I went home.", "I went home,", "And slept.", "And slept.") == "I went home.")
+        // Other fixes in the sentence stay.
+        #expect(keep("We was here.", "We were here", "Then left.", "Then left.") == "We were here.")
+        // A real join: the next sentence's start changed too.
+        #expect(keep("I went home.", "I went home,", "and slept.", "And slept.") == "I went home,")
+        #expect(keep("Reply with your product.", "Reply with your product", "Like it.", "like it.") == "Reply with your product")
+        // The next sentence starts with a quote or bracket: its first letter decides.
+        #expect(keep("He left.", "He left,", "\"Like that,\" she said.", "\"like that,\" she said.") == "He left,")
+        #expect(keep("He left.", "He left", "(Like that.)", "(Like that.)") == "He left.")
+        // Nothing dropped, or nothing to put back.
+        #expect(keep("Hi team.", "Hi, team.", "We met.", "We met.") == "Hi, team.")
+        #expect(keep("See you", "See you.", "Bye.", "Bye.") == "See you.")
     }
 }
 

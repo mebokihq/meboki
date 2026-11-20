@@ -79,6 +79,60 @@ if CommandLine.arguments.contains("--rewrite") {
     }
     exit(0)
 }
+// `--false-fixes`: replays eval/false_fixes.jsonl through `CheckPipeline` with a recorded-reply model.
+// stdin one case per line: {"id", "options"?: {"variant", "level", "casual", "protect"}, and either
+//   "input", "output", "expected" (one check of one paragraph), or
+//   "steps": [{"text", "replies": {sent text: reply}, "expected", "typing"?: bool, "cursor"?: Int}]
+//   (checks in order on one pipeline, so the sentence cache carries over, as while typing)}.
+// A sent text with no recorded reply comes back unchanged. The cursor defaults to the end of the text.
+// stdout one line per step: {"id", "step", "ok", "got", "expected", "sent": [texts sent to the model]}.
+if CommandLine.arguments.contains("--false-fixes") {
+    final class Replay: Corrector, @unchecked Sendable {
+        let lock = NSLock()
+        var replies: [String: String] = [:]
+        var sent: [String] = []
+        func correct(_ text: String, system: String) async throws -> LLMClient.Reply {
+            let out = lock.withLock { () -> String in sent.append(text); return replies[text] ?? text }
+            return LLMClient.Reply(text: out, truncated: false)
+        }
+    }
+    while let line = readLine(strippingNewline: true) {
+        guard !line.isEmpty,
+              let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+              let id = obj["id"] as? String
+        else { FileHandle.standardError.write(Data("bad line: \(line.prefix(80))\n".utf8)); exit(1) }
+        let o = obj["options"] as? [String: Any] ?? [:]
+        let options = CheckOptions(
+            variant: EnglishVariant(rawValue: o["variant"] as? String ?? "US") ?? .us,
+            level: CheckLevel(rawValue: o["level"] as? String ?? "full") ?? .full,
+            casual: o["casual"] as? Bool ?? false,
+            protectTokens: o["protect"] as? Bool ?? true)
+        var steps = obj["steps"] as? [[String: Any]] ?? []
+        if steps.isEmpty, let input = obj["input"] as? String, let output = obj["output"] as? String,
+           let expected = obj["expected"] as? String {
+            steps = [["text": input, "replies": [input: output], "expected": expected]]
+        }
+        guard !steps.isEmpty else { FileHandle.standardError.write(Data("no steps: \(id)\n".utf8)); exit(1) }
+        let model = Replay()
+        let pipe = CheckPipeline(client: model, options: options)
+        for (i, step) in steps.enumerated() {
+            guard let text = step["text"] as? String, let expected = step["expected"] as? String
+            else { FileHandle.standardError.write(Data("bad step \(i): \(id)\n".utf8)); exit(1) }
+            model.lock.withLock {
+                model.replies.merge(step["replies"] as? [String: String] ?? [:]) { $1 }
+                model.sent = []
+            }
+            let cursor = step["cursor"] as? Int ?? (text as NSString).length
+            let scope = CheckPipeline.Scope(cursor: cursor, maxLength: .max, typing: step["typing"] as? Bool ?? false)
+            let got = Diff.apply(try await pipe.check(text, scope: scope).edits, to: text)
+            let out: [String: Any] = ["id": id, "step": i, "ok": got == expected, "got": got, "expected": expected,
+                                      "sent": model.lock.withLock { model.sent }]
+            FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: out) + Data("\n".utf8))
+        }
+    }
+    exit(0)
+}
+
 while let line = readLine(strippingNewline: true) {
     guard !line.isEmpty,
           let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],

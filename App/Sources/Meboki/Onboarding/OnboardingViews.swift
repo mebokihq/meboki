@@ -37,8 +37,8 @@ struct OnboardingRootView: View {
     @ViewBuilder private var page: some View {
         switch model.step {
         case .welcome: WelcomePage(appleModel: model.appleModel)
-        case .access: AccessPage(model: model)
         case .model: ModelPage(model: model, store: store)
+        case .access: AccessPage(model: model)
         case .tryIt: TryPage(model: model, settings: settings)
         case .popup: PopupStylePage(settings: settings)
         case .done: DonePage(model: model, settings: settings)
@@ -70,10 +70,19 @@ struct OnboardingRootView: View {
             Button("Get Started") { model.next() }
                 .buttonStyle(.dsPrimary)
                 .keyboardShortcut(.defaultAction)
-        case .access:
-            next(ready: model.trusted)
         case .model:
             next(ready: modelChosen)
+        case .access:
+            // No way forward without the permission: nothing works without it (design_code.md §8.8).
+            if model.trusted {
+                Button("Continue") { model.next() }
+                    .buttonStyle(.dsPrimary)
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Text("Waiting for Accessibility access…")
+                    .font(DS.Font.footnote)
+                    .foregroundStyle(DS.textSecondary)
+            }
         case .tryIt:
             // No Return shortcut here: Return belongs to the sample text field.
             Button("Continue") { model.next() }.buttonStyle(.dsPrimary)
@@ -452,7 +461,7 @@ private struct ModelPage: View {
             HStack(spacing: 6) {
                 Image(systemName: "memorychip")
                 Text("This Mac has \(Catalog.ramGB) GB of memory. "
-                     + "\(Catalog.recommended.shortName) suits it best.")
+                     + "\(Catalog.appleRecommended(model.appleModel) ? AppleModel.displayName : Catalog.recommended.shortName) suits it best.")
             }
             .font(DS.Font.caption)
             .foregroundStyle(DS.textSecondary)
@@ -684,7 +693,9 @@ private struct AppleCard: View {
 
     private var detail: String {
         switch availability {
-        case .available: "Built into macOS · ready now · no download"
+        case .available:
+            "Built into macOS · no download · fixed \(AppleModel.errorsFixed) of 45 test mistakes · "
+                + String(format: "%.1f s per paragraph · no extra memory", AppleModel.paragraphSeconds)
         case .notEnabled: "Turn on Apple Intelligence in System Settings to use it here, with no download."
         case .modelNotReady: "macOS is still preparing the model. It can be picked once it's ready."
         case .deviceNotEligible: "Not supported on this Mac."

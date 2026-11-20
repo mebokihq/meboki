@@ -97,6 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var bounds: Bool?
         /// The text last handed to the scheduler: a caret move that leaves it the same needs no new pass.
         var requested: String?
+        /// The text seen at the last edit or focus, checked or not (an empty field too): a later different text
+        /// means the user typed (`CheckPipeline.Scope.typing`).
+        var seen: String?
         /// The field's text looked like code last time (`CodeDetector`): logged once, not checked.
         var code = false
         /// This field already counted for learned Manual (`CodeAppLearner`): one verdict per field.
@@ -375,13 +378,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !firstRun, !AX.isTrusted(prompt: false) { _ = AX.isTrusted(prompt: true) }
         watchTrust()
         cloudKeys = Set(CloudProvider.allCases.filter(APIKeyStore.hasKey))
-        // A fresh install on a Mac where Apple's model answers starts with it: checks work with no download
+        // The recommended download moved from E4B to E2B on 16–31 GB Macs (2026-11-20). Someone who downloaded the
+        // former default and never picked a model keeps it: the choice is stored before the new default applies.
+        if UserDefaults.standard.string(forKey: "modelID") == nil, !store.isInstalled(Catalog.recommended),
+           let had = [Catalog.formerRecommended].first(where: store.isInstalled) ?? Catalog.all.first(where: store.isInstalled) {
+            UserDefaults.standard.set(had.id, forKey: "modelID")
+            Log.write("model: kept \(had.id) (downloaded before the default changed)")
+        }
+        // A fresh install on a Mac under 16 GB where Apple's model answers starts with it: checks work with no download
         // (PLAN.md §3; `Catalog.appleIsDefault`). Anyone who already chose, or used the app before, keeps their model.
         if let source = ModelBackend.freshInstallSource(
             storedSource: settings.storedModelSource, storedModelID: UserDefaults.standard.string(forKey: "modelID"),
             onboardingDone: settings.onboardingDone,
             // Never from a DEBUG-forced state on a macOS that can't run the model.
-            apple: AppleIntelligence.canRun ? appleModel : .osTooOld, appleIsDefault: Catalog.appleIsDefault) {
+            apple: AppleIntelligence.canRun ? appleModel : .osTooOld, appleIsDefault: Catalog.appleIsDefault && Catalog.appleTier) {
             settings.modelSource = source
             Log.write("model: fresh install, \(source.rawValue) by default")
         }
@@ -1966,7 +1976,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.current = nil
         scheduleRelayout(after: 0.05)
         showLiveIsland()
-        requestLiveCheck(s)
+        requestLiveCheck(s, typing: true)
         return true
     }
 
@@ -1979,7 +1989,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     /// Hands the current text to the scheduler, which checks it after a typing pause.
-    private func requestLiveCheck(_ s: Session) {
+    /// `typing`: the user edited the field (not our own write, a scroll or a closed popup), so the word right
+    /// before the caret may be half typed and gets no fix yet (`CheckPipeline.Scope.typing`).
+    private func requestLiveCheck(_ s: Session, typing: Bool = false) {
         guard let scheduler = s.scheduler, liveCheckAllowed(s) else { return }
         let text = s.list.text
         // An automatic review whose field now holds code: no re-check (the fixes already shown stay).
@@ -1999,8 +2011,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let caret = AX.selection(el)?.location
         // A hotkey review covers the whole field; an automatic one, what's on screen around the caret.
         let scope: CheckPipeline.Scope = s.auto
-            ? .init(cursor: caret, visible: AX.visibleCharacterRange(el))
-            : .init(cursor: caret, maxLength: .max)
+            ? .init(cursor: caret, visible: AX.visibleCharacterRange(el), typing: typing)
+            : .init(cursor: caret, maxLength: .max, typing: typing)
         let previous = liveChain
         liveChain = Task {
             await previous?.value
@@ -2478,7 +2490,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// (an editable web area), so nothing happens unless the text changed too.
     private func requestAutoCheck(caretOnly: Bool = false) {
         guard var t = autoTarget, t.bounds != false, autoCheckAllowed(t) else { return }
-        guard let text = AX.text(t.element), text.rangeOfCharacter(from: .letters) != nil else {
+        let raw = AX.text(t.element)
+        let seenBefore = t.seen
+        t.seen = raw ?? ""
+        autoTarget?.seen = t.seen
+        guard let text = raw, text.rangeOfCharacter(from: .letters) != nil else {
             stopAutoCheck()
             return
         }
@@ -2525,8 +2541,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let scheduler = autoScheduler(for: pipe)
         let options = settings.checkOptions(for: bundle)
         // What's on screen around the caret; a scroll or the next edit brings the rest.
+        // After typing (not on focus), a word the caret sits right after may be half typed: no fix for it yet.
+        let typing = seenBefore.map { $0 != text } ?? false
         let scope = CheckPipeline.Scope(cursor: AX.selection(t.element)?.location,
-                                        visible: AX.visibleCharacterRange(t.element))
+                                        visible: AX.visibleCharacterRange(t.element), typing: typing)
         autoTarget?.requested = text
         autoRequested = Date()
         let previous = autoChain
