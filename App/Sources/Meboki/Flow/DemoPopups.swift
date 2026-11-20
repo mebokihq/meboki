@@ -18,7 +18,8 @@ enum DemoPopups {
         card.show(CardState(category: .spelling, swap: FixSwap(old: "tomorow", new: "tomorrow"),
                             reason: "“tomorrow” is the correct spelling.",
                             dots: [.applied, .skipped, .current, .pending, .pending, .pending],
-                            position: 1, pending: 4, footer: "On this Mac · Gemma 4 E4B · 1.4 s"),
+                            position: 1, pending: 4, footer: "On this Mac · Gemma 4 E4B · 1.4 s",
+                            update: UpdateController.shared.popupBadge()),
                   field: field, makeKey: false)
         let toastField = CGRect(x: field.minX, y: screen.minY + 160, width: 600, height: 40)
         toast.show(ToastContent(kind: .success, title: "5 fixes applied · 1 kept", detail: "⌘Z undoes in the app",
@@ -29,13 +30,15 @@ enum DemoPopups {
             let word = CGRect(x: field.maxX + 40, y: field.maxY - 20, width: 44, height: 18)
             bubble.show(CardState(category: .grammar, swap: FixSwap(old: "Their", new: "They're"),
                                   reason: "“Their” shows possession. Here you mean “they are”.",
-                                  dots: [], position: 1, pending: 6, footer: ""),
+                                  dots: [], position: 1, pending: 6, footer: "",
+                                  update: UpdateController.shared.popupBadge()),
                         word: word, makeKey: false)
             let next = [IslandFix(category: .clarity, swap: FixSwap(old: "the the", new: "the")),
                         IslandFix(category: .spelling, swap: FixSwap(old: "tomorow", new: "tomorrow"))]
             island.showReview(IslandReview(fix: IslandFix(category: .grammar, swap: FixSwap(old: "Their", new: "They're")),
                                            reason: "Grammar · “Their” shows possession. Here you mean “they are”.",
-                                           upcoming: next, position: 1, pending: 6),
+                                           upcoming: next, position: 1, pending: 6,
+                                           update: UpdateController.shared.popupBadge()),
                               field: field, makeKey: false)
             print("bubble window \(bubble.windowNumber) \(bubble.frame)")
             print("island window \(island.windowNumber) \(island.frame)")

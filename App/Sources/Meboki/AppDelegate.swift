@@ -308,12 +308,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popup.onPrevious = { [weak self] in self?.moveCurrent(forward: false) }
         popup.onNext = { [weak self] in self?.moveCurrent(forward: true) }
         popup.onClose = { [weak self] in self?.closeCard() }
+        // The green update badge (§8.10 "Popup badge"): the review ends and the update window opens, as from
+        // the menu.
+        popup.onUpdate = { [weak self] in self?.showUpdate() }
         island.keys.onApplyAll = { [weak self] in self?.applyAll() }
         island.keys.onApplyOne = { [weak self] in self?.applyCurrent() }
         island.keys.onIgnore = { [weak self] in self?.ignoreCurrent() }
         island.keys.onPrevious = { [weak self] in self?.moveCurrent(forward: false) }
         island.keys.onNext = { [weak self] in self?.moveCurrent(forward: true) }
         island.keys.onClose = { [weak self] in self?.endReview() }
+        island.keys.onUpdate = { [weak self] in self?.showUpdate() }
         // The island stays key through a review; keys it doesn't use (typing, ⌘Z) go on to the target app,
         // whose edit then ends the review as with underlines.
         island.keys.forward = { [weak self] event in
@@ -2096,7 +2100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let place = s.cloudProvider?.name ?? "On this Mac"
         let footer = "\(place) · \(s.modelName) · " + String(format: "%.1f s", s.checkDuration)
         let state = CardState(category: fix.category, swap: swap, reason: fix.reason, dots: dots,
-                              position: pos.n, pending: pos.total, footer: footer, cloud: s.cloudProvider != nil)
+                              position: pos.n, pending: pos.total, footer: footer, cloud: s.cloudProvider != nil,
+                              update: updates.popupBadge())
         var anchor: CGRect?
         if s.mode == .underlines {
             anchor = word ?? overlay.marks.first(where: { $0.fix == i })?.rects.first
@@ -2293,7 +2298,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let reason = settings.explainFixes ? "\(fix.category.title) · \(fix.reason)" : fix.category.title
         if s.mode == .underlines { overlay.current = i }
         island.showReview(IslandReview(fix: IslandFix(category: fix.category, swap: swap), reason: reason,
-                                       upcoming: upcoming, position: pos.n, pending: pos.total),
+                                       upcoming: upcoming, position: pos.n, pending: pos.total,
+                                       update: updates.popupBadge()),
                           field: s.snapshot.frame, makeKey: makeKey)
     }
 

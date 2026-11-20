@@ -13,6 +13,8 @@ final class PopupController {
     var onNext: (() -> Void)? { didSet { forEachKeys { $0.onNext = onNext } } }
     /// Esc.
     var onClose: (() -> Void)? { didSet { forEachKeys { $0.onClose = onClose } } }
+    /// A click on the update badge.
+    var onUpdate: (() -> Void)? { didSet { forEachKeys { $0.onUpdate = onUpdate } } }
 
     private let settings: AppSettings
     private let card = CardPanel()

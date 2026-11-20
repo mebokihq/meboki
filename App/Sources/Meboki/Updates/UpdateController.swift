@@ -46,6 +46,15 @@ final class UpdateController: NSObject, ObservableObject {
     private var installTimer: Timer?
 
     private static let relaunchedKey = "relaunchedByUpdate"
+    private static let foundVersionKey = "updateFoundVersion"
+    private static let foundDateKey = "updateFoundDate"
+
+    /// The newest version found and when it was first found (kept in defaults, so the popup badge counts days
+    /// across launches and stays after "Later" until that version is installed).
+    private var foundVersion: String?
+    private var foundDate: Date?
+    /// The running version the badge compares with (a demo run outside a bundle pretends one).
+    private var runningVersion = UpdateController.currentVersion
 
     private override init() {
         #if DEBUG
@@ -54,6 +63,11 @@ final class UpdateController: NSObject, ObservableObject {
             isEnabled = true
             super.init()
             available = demo
+            // `MEBOKI_DEMO_UPDATE_DAYS=9` pretends the version was found that many days ago (the popup banner).
+            let days = Int(ProcessInfo.processInfo.environment["MEBOKI_DEMO_UPDATE_DAYS"] ?? "") ?? 0
+            foundVersion = demo
+            foundDate = Calendar.current.date(byAdding: .day, value: -days, to: Date())
+            if !UpdateNudge.isNewer(demo, than: runningVersion) { runningVersion = "1.0.0" }
             needsAttention = true
             canCheck = true
             lastCheck = Date()
@@ -62,6 +76,9 @@ final class UpdateController: NSObject, ObservableObject {
         #endif
         let info = Bundle.main.infoDictionary
         isEnabled = UpdateFeed(feed: info?["SUFeedURL"] as? String, publicKey: info?["SUPublicEDKey"] as? String) != nil
+        let d = UserDefaults.standard
+        foundVersion = d.string(forKey: Self.foundVersionKey)
+        foundDate = d.object(forKey: Self.foundDateKey) as? Date
         super.init()
     }
 
@@ -84,7 +101,10 @@ final class UpdateController: NSObject, ObservableObject {
         observations = [
             u.observe(\.canCheckForUpdates) { [weak self] u, _ in
                 let v = u.canCheckForUpdates
-                DispatchQueue.main.async { self?.canCheck = v }
+                DispatchQueue.main.async {
+                    self?.canCheck = v
+                    if v, self?.showWhenReady == true { self?.showUpdate() }
+                }
             },
             u.observe(\.lastUpdateCheckDate) { [weak self] u, _ in
                 let v = u.lastUpdateCheckDate
@@ -105,8 +125,46 @@ final class UpdateController: NSObject, ObservableObject {
     /// "Check for Updates…" and the popover's "Update available" row: Sparkle's window, in front. With a
     /// version already found it opens on that version.
     func showUpdate() {
-        guard let updater, updater.canCheckForUpdates else { return }
+        guard let updater else { return }
+        guard updater.canCheckForUpdates else {
+            // Sparkle is fetching the feed or downloading in the background: open the window as soon as it
+            // can, instead of dropping the click (the popup that was clicked has already closed).
+            showWhenReady = true
+            Log.write("updates: window waits for the background check to finish")
+            return
+        }
+        showWhenReady = false
         updater.checkForUpdates()
+    }
+
+    /// A request to show the update window came while Sparkle couldn't take it (`canCheckForUpdates` false).
+    private var showWhenReady = false
+
+    /// The green badge on the correction popups (design_code.md §8.10 "Popup badge"): a pill, then a banner
+    /// from day 7. Nil without an updater or without a version newer than this one.
+    func popupBadge(now: Date = Date()) -> UpdateNudge.Badge? {
+        guard isEnabled, let version = available ?? foundVersion, let found = foundDate else { return nil }
+        return UpdateNudge.badge(version: version, current: runningVersion, found: found, now: now)
+    }
+
+    private func clearFound() {
+        guard foundVersion != nil else { return }
+        Log.write("updates: \(foundVersion ?? "") no longer offered; popup badge off")
+        foundVersion = nil
+        foundDate = nil
+        let d = UserDefaults.standard
+        d.removeObject(forKey: Self.foundVersionKey)
+        d.removeObject(forKey: Self.foundDateKey)
+    }
+
+    /// Remembers the day `version` was first found; a different version starts the count again.
+    private func noteFound(_ version: String) {
+        guard foundVersion != version else { return }
+        foundVersion = version
+        foundDate = Date()
+        let d = UserDefaults.standard
+        d.set(version, forKey: Self.foundVersionKey)
+        d.set(foundDate, forKey: Self.foundDateKey)
     }
 
     /// "0.1.0", as in Info.plist ("dev" when run outside a bundle).
@@ -167,7 +225,26 @@ extension UpdateController: SPUUpdaterDelegate {
 
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         let version = item.displayVersionString
-        DispatchQueue.main.async { Log.write("updates: found \(version)") }
+        DispatchQueue.main.async {
+            Log.write("updates: found \(version)")
+            self.noteFound(version)
+        }
+    }
+
+    /// The feed no longer offers a newer version (it was pulled, or it's installed): the popup badge goes.
+    /// Only when the feed's newest item is not newer than this build; a scheduled check that hides a version
+    /// the user skipped says the same thing, so then the badge stays (it shows until the version is installed).
+    nonisolated func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        let info = (error as NSError).userInfo
+        let reason = (info[SPUNoUpdateFoundReasonKey] as? NSNumber).flatMap { SPUNoUpdateFoundReason(rawValue: $0.int32Value) }
+        let userInitiated = (info[SPUNoUpdateFoundUserInitiatedKey] as? NSNumber)?.boolValue ?? false
+        guard reason == .onLatestVersion || reason == .onNewerThanLatestVersion else { return }
+        DispatchQueue.main.async {
+            let d = UserDefaults.standard
+            let skipped = d.string(forKey: "SUSkippedVersion") != nil || d.string(forKey: "SUSkippedMajorVersion") != nil
+            guard userInitiated || !skipped else { return }
+            self.clearFound()
+        }
     }
 
     nonisolated func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
@@ -195,6 +272,7 @@ extension UpdateController: SPUStandardUserDriverDelegate {
                 Log.write("updates: \(version) \(handleShowingUpdate ? "shown in the update window" : "waits behind the menu-bar icon")")
             }
             self.available = version
+            self.noteFound(version)
             self.needsAttention = !handleShowingUpdate
         }
     }

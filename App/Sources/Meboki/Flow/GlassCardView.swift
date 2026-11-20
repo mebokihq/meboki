@@ -33,12 +33,15 @@ struct CardState: Equatable {
     var footer: String
     /// A cloud model checked the text: the footer shows a cloud instead of the lock.
     var cloud = false
+    /// A newer Meboki waits (§8.10 "Popup badge"): the green pill, and from day 7 the banner.
+    var update: UpdateNudge.Badge?
 }
 
 struct CardActions {
     var applyAll: () -> Void = {}
     var applyOne: () -> Void = {}
     var ignore: () -> Void = {}
+    var update: () -> Void = {}
 }
 
 /// Root of the card window: the card for `state`, popping in when `appear.shown` turns true.
@@ -62,6 +65,7 @@ struct GlassCard: View {
 
     /// Above this many fixes the dots would crowd the header; the "n of N" count stays.
     static let maxDots = 14
+    static let maxDotsWithUpdate = 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -75,9 +79,14 @@ struct GlassCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             buttons.padding(.top, 2)
-            VStack(alignment: .leading, spacing: 10) {
-                DSSeparator()
-                PrivacyLine(text: state.footer, symbol: state.cloud ? "cloud" : "lock")
+            // From day 7 the update banner takes the footer's place (§8.10 "Popup badge").
+            if let update = state.update, update.level == .banner {
+                UpdateBanner(badge: update, action: actions.update)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    DSSeparator()
+                    PrivacyLine(text: state.footer, symbol: state.cloud ? "cloud" : "lock")
+                }
             }
         }
         .padding(EdgeInsets(top: 16, leading: 16, bottom: 12, trailing: 16))
@@ -89,8 +98,12 @@ struct GlassCard: View {
     private var header: some View {
         HStack(spacing: 10) {
             CategoryChip(title: state.category.title, color: state.category.color)
+            if let update = state.update { UpdatePill(badge: update, action: actions.update) }
             Spacer(minLength: 0)
-            if state.dots.count <= Self.maxDots { ProgressDots(dots: state.dots) }
+            // The pill takes room from the dots.
+            if state.dots.count <= (state.update == nil ? Self.maxDots : Self.maxDotsWithUpdate) {
+                ProgressDots(dots: state.dots)
+            }
             Text("\(state.position) of \(state.pending)")
                 .font(.system(size: 12))
                 .monospacedDigit()
@@ -201,7 +214,8 @@ final class CardPanel {
     private var actions: CardActions {
         CardActions(applyAll: { [weak self] in self?.keys.onApplyAll?() },
                     applyOne: { [weak self] in self?.keys.onApplyOne?() },
-                    ignore: { [weak self] in self?.keys.onIgnore?() })
+                    ignore: { [weak self] in self?.keys.onIgnore?() },
+                    update: { [weak self] in self?.keys.onUpdate?() })
     }
 
     var isVisible: Bool { panel.isVisible }

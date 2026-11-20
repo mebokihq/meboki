@@ -15,6 +15,7 @@ struct BubbleActions {
     var ignore: () -> Void = {}
     var previous: () -> Void = {}
     var next: () -> Void = {}
+    var update: () -> Void = {}
 }
 
 /// Root of the bubble window: the bubble for `state`, popping in when `appear.shown` turns true.
@@ -54,6 +55,9 @@ struct AnchoredBubble: View {
                     .lineSpacing(DS.reasonLineSpacing)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let update = state.update, update.level == .banner {
+                UpdateBanner(badge: update, compact: true, action: actions.update)
+            }
             footer
         }
         .padding(12)
@@ -71,6 +75,8 @@ struct AnchoredBubble: View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(state.category.title).font(DS.Font.chip).foregroundStyle(color)
+            // The bubble is 280 wide: "Update" without the version (§8.10 "Popup badge").
+            if let update = state.update { UpdatePill(badge: update, compact: true, action: actions.update) }
             Spacer(minLength: 0)
             Button(action: actions.previous) { Text("‹") }
                 .buttonStyle(BubbleNavStyle())
@@ -259,7 +265,8 @@ final class BubblePanel {
                       applyOne: { [weak self] in self?.keys.onApplyOne?() },
                       ignore: { [weak self] in self?.keys.onIgnore?() },
                       previous: { [weak self] in self?.keys.onPrevious?() },
-                      next: { [weak self] in self?.keys.onNext?() })
+                      next: { [weak self] in self?.keys.onNext?() },
+                      update: { [weak self] in self?.keys.onUpdate?() })
     }
 
     var isVisible: Bool { panel.isVisible }

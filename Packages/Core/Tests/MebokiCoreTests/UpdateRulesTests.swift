@@ -42,4 +42,58 @@ import Testing
         #expect(UpdateText.lastChecked(today, now: now, calendar: cal, locale: locale) == "Checked today at 14:05")
         #expect(UpdateText.lastChecked(earlier, now: now, calendar: cal, locale: locale) == "Checked 12 Nov 2026")
     }
+
+    // MARK: Popup badge
+
+    var utc: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }
+
+    func date(_ s: String) -> Date { ISO8601DateFormatter().date(from: s)! }
+
+    @Test func pillUntilDaySevenThenBanner() {
+        #expect(UpdateNudge.level(daysWaiting: 0) == .pill)
+        #expect(UpdateNudge.level(daysWaiting: 6) == .pill)
+        #expect(UpdateNudge.level(daysWaiting: 7) == .banner)
+        #expect(UpdateNudge.level(daysWaiting: 40) == .banner)
+    }
+
+    @Test func daysCountCalendarDays() {
+        let found = date("2026-11-20T23:30:00Z")
+        #expect(UpdateNudge.daysWaiting(since: found, now: date("2026-11-20T23:59:00Z"), calendar: utc) == 0)
+        #expect(UpdateNudge.daysWaiting(since: found, now: date("2026-11-21T00:10:00Z"), calendar: utc) == 1)
+        #expect(UpdateNudge.daysWaiting(since: found, now: date("2026-11-27T08:00:00Z"), calendar: utc) == 7)
+        // A clock set back counts as today.
+        #expect(UpdateNudge.daysWaiting(since: found, now: date("2026-11-18T08:00:00Z"), calendar: utc) == 0)
+    }
+
+    @Test func badgeOnlyForANewerVersion() {
+        let found = date("2026-11-10T09:00:00Z"), now = date("2026-11-20T09:00:00Z")
+        let b = UpdateNudge.badge(version: "1.0.3", current: "1.0.2", found: found, now: now, calendar: utc)
+        #expect(b == UpdateNudge.Badge(version: "1.0.3", current: "1.0.2", level: .banner, daysWaiting: 10))
+        #expect(UpdateNudge.badge(version: "1.0.2", current: "1.0.2", found: found, now: now, calendar: utc) == nil)
+        #expect(UpdateNudge.badge(version: "1.0.1", current: "1.0.2", found: found, now: now, calendar: utc) == nil)
+    }
+
+    @Test func versionOrder() {
+        #expect(UpdateNudge.isNewer("1.0.10", than: "1.0.9"))
+        #expect(UpdateNudge.isNewer("1.1", than: "1.0.9"))
+        #expect(UpdateNudge.isNewer("2.0.0", than: "1.9"))
+        #expect(!UpdateNudge.isNewer("1.1", than: "1.1.0"))
+        #expect(!UpdateNudge.isNewer("1.0.2", than: "1.0.3"))
+        #expect(!UpdateNudge.isNewer("1.0.3", than: "dev"))
+        #expect(!UpdateNudge.isNewer("dev", than: "1.0.0"))
+        #expect(!UpdateNudge.isNewer("1..2", than: "1.0"))
+    }
+
+    @Test func bannerWords() {
+        #expect(UpdateText.badge("1.0.3") == "Update 1.0.3")
+        #expect(UpdateText.bannerTitle("1.0.3") == "Meboki 1.0.3 is ready")
+        #expect(UpdateText.bannerDetail(daysWaiting: 0, current: "1.0.2") == "Found today · you're on 1.0.2")
+        #expect(UpdateText.bannerDetail(daysWaiting: 1, current: "1.0.2") == "Found yesterday · you're on 1.0.2")
+        #expect(UpdateText.bannerDetail(daysWaiting: 9, current: "1.0.2") == "Found 9 days ago · you're on 1.0.2")
+        #expect(UpdateText.found(daysWaiting: 9) == "Found 9 days ago")
+    }
 }

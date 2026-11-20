@@ -20,6 +20,9 @@ struct IslandReview: Equatable {
     /// "n/N": the current fix's position among the pending fixes, and the pending count.
     var position: Int
     var pending: Int
+    /// A newer Meboki waits (§8.10 "Popup badge"): the pill in the main row, and from day 7 the banner in
+    /// the expanded part.
+    var update: UpdateNudge.Badge?
 }
 
 /// What the island shows: checking (§5.2), review (§5.6), done (§5.7) or a message (§5.8).
@@ -43,6 +46,8 @@ struct IslandActions {
     var togglePin: () -> Void = {}
     /// The message's pill button.
     var messageAction: () -> Void = {}
+    /// The update badge.
+    var update: () -> Void = {}
 }
 
 /// Hover, pin and appearance state that changes without re-sizing the window.
@@ -180,6 +185,7 @@ struct IslandView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(r.fix.category.title): \(Self.spoken(r.fix.swap))")
         Spacer(minLength: 10)
+        if let update = r.update { UpdatePill(badge: update, hud: true, action: actions.update) }
         Button(action: r.pending > 1 ? actions.applyAll : actions.applyOne) {
             HStack(spacing: 6) {
                 Text(r.pending > 1 ? "Apply all \(r.pending)" : "Apply")
@@ -278,6 +284,9 @@ private struct IslandMore: View {
                 .padding(.top, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .top) { DSSeparator(color: DS.hudControl, highColor: DS.hudRingHigh) }
+            }
+            if let update = review.update, update.level == .banner {
+                UpdateBanner(badge: update, hud: true, action: actions.update)
             }
             HStack(spacing: 6) {
                 Spacer(minLength: 0)
@@ -546,6 +555,7 @@ final class IslandPanel {
             self.makeKey()
             withAnimation(DS.Motion.reduceMotion ? nil : DS.Motion.islandExpand) { self.model.pinned.toggle() }
         }
+        acts.update = { [weak self] in self?.keys.onUpdate?() }
         acts.messageAction = { [weak self] in
             let action = self?.messageAction
             self?.hide()

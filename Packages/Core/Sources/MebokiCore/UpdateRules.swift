@@ -46,6 +46,67 @@ public enum UpdateTiming {
     }
 }
 
+/// The green update badge on the correction popups (design_code.md §8.10 "Popup badge"): a pill from the day a
+/// version is found, a full-width banner from day 7 on. It stays until that version is installed, so "Later"
+/// in the update window doesn't hide it.
+public enum UpdateNudge {
+    public enum Level: Equatable, Sendable { case pill, banner }
+
+    /// What a popup shows.
+    public struct Badge: Equatable, Sendable {
+        public var version: String
+        public var current: String
+        public var level: Level
+        /// Whole days since the version was first found (0 = today).
+        public var daysWaiting: Int
+
+        public init(version: String, current: String, level: Level, daysWaiting: Int) {
+            self.version = version
+            self.current = current
+            self.level = level
+            self.daysWaiting = daysWaiting
+        }
+    }
+
+    /// From this many days waiting on, the pill becomes the banner.
+    public static let bannerAfterDays = 7
+
+    /// Calendar days from `found` to `now` (never negative: a clock set back counts as today).
+    public static func daysWaiting(since found: Date, now: Date, calendar: Calendar = .current) -> Int {
+        let a = calendar.startOfDay(for: found), b = calendar.startOfDay(for: now)
+        return max(0, calendar.dateComponents([.day], from: a, to: b).day ?? 0)
+    }
+
+    public static func level(daysWaiting: Int) -> Level {
+        daysWaiting >= bannerAfterDays ? .banner : .pill
+    }
+
+    /// The badge for `version`, first found at `found`; nil when it isn't newer than the running `current`.
+    public static func badge(version: String, current: String, found: Date, now: Date,
+                             calendar: Calendar = .current) -> Badge? {
+        guard isNewer(version, than: current) else { return nil }
+        let days = daysWaiting(since: found, now: now, calendar: calendar)
+        return Badge(version: version, current: current, level: level(daysWaiting: days), daysWaiting: days)
+    }
+
+    /// "1.0.10" is newer than "1.0.9"; missing parts count as 0 ("1.1" == "1.1.0"). A version that isn't
+    /// dotted numbers ("dev") is never newer and nothing is newer than it.
+    public static func isNewer(_ a: String, than b: String) -> Bool {
+        guard let x = parts(a), let y = parts(b) else { return false }
+        for i in 0..<max(x.count, y.count) {
+            let l = i < x.count ? x[i] : 0, r = i < y.count ? y[i] : 0
+            if l != r { return l > r }
+        }
+        return false
+    }
+
+    private static func parts(_ v: String) -> [Int]? {
+        let p = v.trimmingCharacters(in: .whitespaces).split(separator: ".", omittingEmptySubsequences: false)
+        let n = p.compactMap { Int($0) }
+        return !p.isEmpty && n.count == p.count ? n : nil
+    }
+}
+
 /// The words the app uses for updates (Settings, the menu-bar popover, the menu).
 public enum UpdateText {
     public static let checkNow = "Check for Updates…"
@@ -62,6 +123,24 @@ public enum UpdateText {
     }
 
     public static func available(_ version: String) -> String { "Update available · \(version)" }
+
+    /// The popup pill: "Update 1.0.3".
+    public static func badge(_ version: String) -> String { "Update \(version)" }
+    /// The popup banner: "Meboki 1.0.3 is ready" · "Found 9 days ago · you're on 1.0.2" · "Install…".
+    public static func bannerTitle(_ version: String) -> String { "Meboki \(version) is ready" }
+    public static func bannerDetail(daysWaiting: Int, current: String) -> String {
+        "\(found(daysWaiting: daysWaiting)) · you're on \(current)"
+    }
+    /// "Found today", "Found yesterday", "Found 9 days ago".
+    public static func found(daysWaiting: Int) -> String {
+        switch daysWaiting {
+        case ...0: "Found today"
+        case 1: "Found yesterday"
+        default: "Found \(daysWaiting) days ago"
+        }
+    }
+    public static let bannerButton = "Install…"
+    public static let badgeHint = "Opens the update window"
 
     /// "Checked today at 14:05", "Checked 12 Nov"; nil before the first check.
     public static func lastChecked(_ date: Date?, now: Date = Date(), calendar: Calendar = .current,
