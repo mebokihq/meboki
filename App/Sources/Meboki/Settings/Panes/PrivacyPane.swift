@@ -42,12 +42,17 @@ struct PrivacyPane: View {
                 SettingsRow(leading: {
                     SettingsLabel(title: "Logs", subtitle: "~/Library/Logs/Meboki/", monospacedSubtitle: true)
                 }, control: {
-                    Button("Show in Finder", action: model.actions.showLogs).buttonStyle(.ds(.secondary, small: true))
+                    HStack(spacing: 12) {
+                        Button("Show in Finder", action: model.actions.showLogs).buttonStyle(.ds(.secondary, small: true))
+                        SettingsSwitch(isOn: $settings.logEnabled, label: "Logs")
+                    }
                 })
                 SettingsDivider()
                 SettingsRow("Short text snippets in logs", subtitle: "Helps debug a bad fix. Off keeps logs text-free") {
                     SettingsSwitch(isOn: $settings.logSnippets, label: "Short text snippets in logs")
+                        .disabled(!settings.logEnabled)
                 }
+                .opacity(settings.logEnabled ? 1 : 0.5)
             }
         }
     }

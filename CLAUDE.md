@@ -85,7 +85,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Onboarding/OnboardingWindow.swift   onboarding window (680 × 560), OnboardingModel (step, trust, engine, try state), AppMenus (window menu, accessory policy on close)
   Onboarding/OnboardingViews.swift    pages: Welcome, Accessibility (live grant), Model (download, disk space), Try it (sample check), Popup style (live preview), Done
   Onboarding/OnboardingDemo.swift     DEBUG `--onboarding-demo <step> [--dark] [--trusted] [--downloading]` for screenshots
-  Settings/AppSettings.swift    UserDefaults-backed settings (popup style, writing options, appModes, checkedApps, hotkey, logSnippets, showInMenuBar, …)
+  Settings/AppSettings.swift    UserDefaults-backed settings (popup style, writing options, appModes, checkedApps, hotkey, logEnabled, logSnippets, showInMenuBar, …)
   Licence/LicenceManager.swift  licence state (`entitlement`: licensed / trial / free), activation, `recordCheck` per real check, daily revoked-list fetch, `transitions`; Licence/LicenceStore (key + revoked list files), TrialStore (Keychain + UserDefaults), LicenceCLI (DEBUG `--licence-status`, `--verify-licence <key>`)
   Licence/LicenceDebug.swift    DEBUG: `DebugClock` (real time + an offset in UserDefaults), `DebugSigner` (test keys and revoked lists, signed with the test signing key from the login Keychain)
   Settings/Panes/DebugPane.swift  DEBUG: Settings › Debug: licence status, trial presets, clock jumps, onboarding reset, test keys, revoked-list tools (`make-app.sh --debug --install`)
@@ -159,7 +159,7 @@ docs/bench/                     long-field benchmark page
 
 Flow: hotkey → `AX.snapshot` (focused element, `AX.text`, `AX.selection`) → `ProofreadEngine.check` (one request per paragraph) → `PostFilter.judge` → `Diff.edits` → `EditFilter` (settings) → `FixList` in `Session` → `AX.lineRects` (`AX.bounds`: native, markers or leaves) → underline overlay → click → glass card → `AX.replace` per fix.
 
-Runtime paths: models in `~/Library/Application Support/Meboki/Models/`, logs in `~/Library/Logs/Meboki/` (`meboki.log`, `llama-server.log`).
+Runtime paths: models in `~/Library/Application Support/Meboki/Models/`, logs in `~/Library/Logs/Meboki/` (`meboki.log`, `llama-server.log`; written only with Settings › Privacy › Logs on).
 
 ## Commands
 
@@ -189,7 +189,7 @@ Run `swift build` and `swift test` after every change. For app changes, also run
 - **Keep `Prompt.system` byte-identical** across requests. llama-server reuses its cached prefix, so only the user text is processed. Per-user settings (US/UK) go in once per session, never per request (`Prompt.system(for:)`). Per-app settings (Casual), the check level and protected tokens are post-filters (`EditFilter`), never prompt text.
 - **All ranges are UTF-16 `NSRange`**, because the Accessibility API uses UTF-16. Emoji break anything else.
 - **Never write text you haven't verified.** `AX.replace` checks the original is still at the range before writing, proves the selection (`AX.select(el, range, in:)`: the selected text must be the original; Chrome's selection read-back lies), and checks the prefix after. The paste fallback runs only when the field is unchanged, still focused, and its app is frontmost. Truncated or too-different model replies are rejected. Don't weaken these checks.
-- **Privacy:** never read `AXSecureTextField` fields or anything while `IsSecureEventInputEnabled()`. No telemetry. Logs stay local, with short snippets only (`Log.snippet`).
+- **Privacy:** never read `AXSecureTextField` fields or anything while `IsSecureEventInputEnabled()`. No telemetry. Logs are off by default (`logEnabled`; `Log.write` and the `llama-server` output check it); when on they stay local, and text snippets are a second switch, also off by default (`Log.snippet`, `Log.pair`).
 - **Cloud (BYOK):** nothing is sent until the user presses Use. API keys live only in the Keychain (`APIKeyStore`), never in UserDefaults, logs or toasts. Keep `store: false` on every Responses request and `provider.zdr: true` on OpenRouter; add only ZDR-capable models to the OpenRouter catalog.
 - **Signing:** `make-app.sh` signs with the keychain's Developer ID Application identity (hardened runtime + secure timestamp) when there is one, else with `Local Code Signing` (docs/self-signed-certificate.md). Keep one identity per Mac: switching, or ad-hoc (`-`), resets the Accessibility permission. The bundle ID is `com.meboki.app` and never changes once released (Sparkle refuses an update with another ID; it also resets Accessibility). `LegacyMigration` moves what older bundle IDs left.
 - **Updates:** never start Sparkle in a build without a feed, and never let a found version open a window or take the keyboard while another app is in use (`UpdateController`). System profiling stays off. The update signing key is never in the repository; `test-update.sh` makes a throwaway one under `build/`.

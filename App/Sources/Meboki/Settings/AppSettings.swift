@@ -82,7 +82,8 @@ final class AppSettings: ObservableObject {
             .flatMap { try? JSONDecoder().decode(CodeAppLearner.self, from: $0) } ?? CodeAppLearner()
         hotkey = defaults.data(forKey: Key.hotkey).flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) }
             ?? .default
-        logSnippets = defaults.object(forKey: Key.logSnippets) as? Bool ?? true
+        logEnabled = defaults.bool(forKey: Key.logEnabled)
+        logSnippets = defaults.bool(forKey: Key.logSnippets)
         showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
         lastSettingsPane = defaults.string(forKey: Key.lastSettingsPane) ?? "general"
         let tone = ColorTone(rawValue: defaults.string(forKey: Key.colorTone) ?? "") ?? .muted
@@ -113,7 +114,9 @@ final class AppSettings: ObservableObject {
         static let checkedApps = "checkedApps"
         static let codeLearning = "codeLearning"
         static let hotkey = "hotkey"
-        /// Read by `Log.snippet` (any thread) straight from `UserDefaults.standard`.
+        /// Read by `Log.write` (any thread) and `ServerManager` straight from `UserDefaults.standard`.
+        static let logEnabled = "logEnabled"
+        /// Read by `Log.snippet` / `Log.pair` (any thread) straight from `UserDefaults.standard`.
         static let logSnippets = "logSnippets"
         static let showInMenuBar = "showInMenuBar"
         static let lastSettingsPane = "lastSettingsPane"
@@ -190,7 +193,13 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(try? JSONEncoder().encode(hotkey), forKey: Key.hotkey) }
     }
 
-    /// Short text snippets in the log (Settings › Privacy). Off logs lengths only. Default on.
+    /// Write the diagnostics logs at all (Settings › Privacy). Default off: nothing goes to
+    /// ~/Library/Logs/Meboki/ until the user turns it on.
+    @Published var logEnabled: Bool {
+        didSet { defaults.set(logEnabled, forKey: Key.logEnabled) }
+    }
+
+    /// Short text snippets in the log (Settings › Privacy). Off logs lengths only. Default off.
     @Published var logSnippets: Bool {
         didSet { defaults.set(logSnippets, forKey: Key.logSnippets) }
     }

@@ -1398,7 +1398,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showAppLog() {
         if !FileManager.default.fileExists(atPath: Log.url.path) { Log.write("log created") }
-        NSWorkspace.shared.open(Log.url)
+        // With logging off there may be no file: show the folder instead.
+        NSWorkspace.shared.open(FileManager.default.fileExists(atPath: Log.url.path) ? Log.url : Log.url.deletingLastPathComponent())
     }
 
     // MARK: Model

@@ -69,7 +69,7 @@ Click the menu-bar icon, then the gear (or press ⌘,).
 | Writing | US or UK English, what to check (Spelling, Grammar, Full), casual mode, protect names, code and links, explain each fix |
 | Models | Apple Intelligence (macOS 26); download, switch, pause local models; cloud with your own key |
 | Apps | On / Casual / Off per app |
-| Privacy | Log snippets on or off |
+| Privacy | Logs on or off (default off); short text snippets in logs on or off (default off) |
 | Licence | Enter a licence key |
 
 ### Cloud with your own key

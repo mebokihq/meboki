@@ -83,7 +83,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
                      "Code editor", "IDE", "Password manager", "Remote desktop", "Code", "Password fields"]
         case .shortcuts: ["Global", "Check text", "Apply all fixes", "Apply this fix", "Skip", "Ignore",
                           "Previous / next fix", "Close", "Hotkey", "Keyboard"]
-        case .privacy: ["Text sent to the internet", "Cloud", "Model downloads", "Logs", "Short text snippets in logs",
+        case .privacy: ["Text sent to the internet", "Cloud", "Model downloads", "Logs", "Diagnostics", "Short text snippets in logs",
                         "Licence check", "Revoked keys"]
         case .licence: ["Licence", "License", "Trial", "Free mode", "Activate", "Buy a Licence", "Licence key", "Key",
                         "Paste", "Remove Licence", "Lost your key", "Refund", "Unlock", "What a licence adds"]

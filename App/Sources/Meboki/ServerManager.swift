@@ -77,10 +77,16 @@ final class ServerManager {
             "-m", model.path, "--host", "127.0.0.1", "--port", String(port),
             "-c", "8192", "-np", String(Self.slots), "--kv-unified", "--jinja", "--no-webui", "-ngl", "999",
         ]
-        FileManager.default.createFile(atPath: Self.logURL.path, contents: nil)
-        if let log = try? FileHandle(forWritingTo: Self.logURL) {
-            p.standardOutput = log
-            p.standardError = log
+        // With Settings › Privacy › Logs off (the default) the server's output goes nowhere.
+        if Log.enabled {
+            FileManager.default.createFile(atPath: Self.logURL.path, contents: nil)
+            if let log = try? FileHandle(forWritingTo: Self.logURL) {
+                p.standardOutput = log
+                p.standardError = log
+            }
+        } else {
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
         }
         p.terminationHandler = { [weak self] proc in
             Task { @MainActor in

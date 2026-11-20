@@ -516,8 +516,12 @@ final class ClipboardGuard {
     }
 }
 
-/// Local diagnostics log: ~/Library/Logs/Meboki/meboki.log (never leaves the Mac).
+/// Local diagnostics log: ~/Library/Logs/Meboki/meboki.log (never leaves the Mac). Written only while
+/// Settings › Privacy › Logs is on (default off).
 enum Log {
+    static var enabled: Bool { UserDefaults.standard.bool(forKey: AppSettings.Key.logEnabled) }
+    static var snippetsEnabled: Bool { UserDefaults.standard.bool(forKey: AppSettings.Key.logSnippets) }
+
     static let url: URL = {
         let dir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/Meboki", isDirectory: true)
@@ -526,6 +530,7 @@ enum Log {
     }()
 
     static func write(_ line: String) {
+        guard enabled else { return }
         let stamp = ISO8601DateFormatter().string(from: Date())
         let data = Data("\(stamp) \(line)\n".utf8)
         if let fh = try? FileHandle(forWritingTo: url) {
@@ -538,9 +543,9 @@ enum Log {
     }
 
     /// "old" → "new" for a written edit: each side cut to 40 characters (a grouped write spans a sentence or
-    /// more). With snippets off, only the lengths.
+    /// more). With snippets off (the default), only the lengths.
     static func pair(_ old: String, _ new: String) -> String {
-        guard UserDefaults.standard.object(forKey: AppSettings.Key.logSnippets) as? Bool ?? true else {
+        guard snippetsEnabled else {
             return "(\(old.utf16.count) → \(new.utf16.count) chars)"
         }
         func cut(_ s: String) -> String { (s.count > 40 ? String(s.prefix(40)) + "…" : s).debugDescription }
@@ -551,7 +556,7 @@ enum Log {
     /// Settings › Privacy › "Short text snippets in logs" off, only the length.
     static func snippet(_ s: String, around range: NSRange) -> String {
         let ns = s as NSString
-        guard UserDefaults.standard.object(forKey: AppSettings.Key.logSnippets) as? Bool ?? true else {
+        guard snippetsEnabled else {
             return "(len \(ns.length))"
         }
         let lo = max(0, min(range.location, ns.length) - 40)
