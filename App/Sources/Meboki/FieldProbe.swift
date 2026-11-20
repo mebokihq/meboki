@@ -2,7 +2,7 @@
 import AppKit
 
 /// DEBUG-only: `.build/debug/Meboki --probe-field <bundle id> [word …] [--select word] [--caret word]
-/// [--write word replacement]` reads the app's focused field the way a check does and prints what the text
+/// [--write word replacement] [--replace word replacement]` reads the app's focused field the way a check does and prints what the text
 /// adapter sees: role, kind, text length, selection, and the bounds of each `word` (native and adapted).
 /// `--select` / `--caret` (after the word) only move the selection. `--write` is for test pages only: a proven
 /// selection, then an Accessibility write (`AXSelectedText`); never keystrokes, so it's safe with the app in the
@@ -33,9 +33,10 @@ enum FieldProbe {
         let has = AX.hasTextBounds(el, text: text, visible: AX.visibleCharacterRange(el))
         print("hasTextBounds \(has)" + String(format: " (%.0f ms)", Date().timeIntervalSince(t1) * 1000))
         var words: [String] = []
-        var select: String?, caret: String?, write: (String, String)?
+        var select: String?, caret: String?, write: (String, String)?, replace: (String, String)?
         var j = i + 2
         while j < args.count {
+            if args[j] == "--replace", args.indices.contains(j + 2) { replace = (args[j + 1], args[j + 2]); j += 3; continue }
             if args[j] == "--select", args.indices.contains(j + 1) { select = args[j + 1]; j += 2; continue }
             if args[j] == "--caret", args.indices.contains(j + 1) { caret = args[j + 1]; j += 2; continue }
             if args[j] == "--write", args.indices.contains(j + 2) { write = (args[j + 1], args[j + 2]); j += 3; continue }
@@ -70,6 +71,21 @@ enum FieldProbe {
             let expected = ns.replacingCharacters(in: r, with: replacement)
             let applied = AX.waitForValue(el, timeout: 1) { $0 == expected }
             print("write \(word.debugDescription) → \(replacement.debugDescription) @\(r.location): AX \(ok), field as expected \(applied)")
+        }
+        if let (word, replacement) = replace {
+            // The app's own write path (`AX.replace`, paste fallback included). The paste fallback sends ⌘V to the
+            // frontmost app, so this runs only when the field's app is in front; the clipboard is restored.
+            let r = ns.range(of: word)
+            guard r.location != NSNotFound else { print("replace: not in the text"); return }
+            guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
+                print("replace: \(args[i + 1]) isn't in front; nothing written"); return
+            }
+            let clipboard = ClipboardGuard()
+            let ok = AX.replace(in: el, pid: app.processIdentifier, range: r, original: word, replacement: replacement)
+            let expected = ns.replacingCharacters(in: r, with: replacement)
+            print("replace \(word.debugDescription) → \(replacement.debugDescription) @\(r.location): \(ok), field as expected \(AX.text(el) == expected)")
+            clipboard.restore(after: 0.3)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.6))
         }
     }
 }

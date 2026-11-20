@@ -14,7 +14,7 @@ Quick start: `swift build && swift test`, then `Scripts/make-app.sh --install` t
 - **Automatic check** (`FocusTracker`, needs the local model and "Underline mistakes as I type"): the focused editable text area is checked after a typing pause or on focus. Underlines only; Esc mutes the field until focus moves; ignored fixes stay ignored (`IgnoredFixes`).
 - **Live review:** after a whole-field check with the local model, typing keeps the review: fixes follow the text and edited sentences are checked again after a pause (`CheckScheduler`). With a selection or cloud, typing ends the review.
 - **Fix keys:** ⏎ applies all, ⇧⏎ this one, ⇥ ignores, ← → move, Esc closes. Esc with no popup, or leaving the field, clears the underlines.
-- **Skipped automatically:** single-line fields, apps set to Manual or Off (`AppRules`: terminals and code editors Manual, password managers and remote desktops Off), fields that look like code (`CodeDetector`), and, with "Skip text that isn't English" on, foreign text (`LanguageGate`).
+- **Skipped automatically:** single-line fields (except prose fields that only report as single-line: the Messages composer, Reminders titles and notes; `AX.isProseTextField`), apps set to Manual or Off (`AppRules`: terminals and code editors Manual, password managers and remote desktops Off), fields that look like code (`CodeDetector`), and, with "Skip text that isn't English" on, foreign text (`LanguageGate`).
 
 ### Reading and writing fields
 
@@ -73,6 +73,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   AppDelegate.swift             debug menu, popover state, hotkey, check flow, pause gate, review session on a FixList (underlines or fallback card, apply / apply all / ignore), toasts, status pulse
   Accessibility.swift           AX read/write, app quirks, secure-input checks, paste fallback, ClipboardGuard, Log
   RichText.swift                text-marker adapter: AX.text / selection / select / bounds for any field (Chromium contenteditable via text leaves, WebKit editable web areas like Mail via text markers)
+  VCLGeometry.swift             LibreOffice (VCL) quirk: element frames and text bounds flipped with the wrong screen height on several displays
   FieldProbe.swift              DEBUG `--probe-field <bundle id> [word …]`: what the adapter sees in an app's focused field
   Flow/Panels.swift             KeyPanel, HostedPanel (transparent non-activating panel, sync sizing), placement below the field
   Flow/Panels.swift             (also) PopupKeys: the shared popup keys ⏎ ⇧⏎ ⇥ ← → Esc

@@ -189,15 +189,17 @@ extension AX {
         var cf = CFRange(location: range.location, length: range.length)
         guard let p = AXValueCreate(.cfRange, &cf), let v = param(el, kAXBoundsForRangeParameterizedAttribute, p)
         else { return nil }
-        return rect(v)
+        return rect(v, shiftY: VCLGeometry.boundsShift(el) ?? 0)
     }
 
-    /// An AX rect value converted to Cocoa coordinates; nil when empty or not finite.
-    private static func rect(_ v: CFTypeRef) -> CGRect? {
+    /// An AX rect value converted to Cocoa coordinates (after moving it `shiftY` down in AX coordinates, for an
+    /// app quirk); nil when empty or not finite.
+    private static func rect(_ v: CFTypeRef, shiftY: CGFloat = 0) -> CGRect? {
         guard CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
         var r = CGRect.zero
         guard AXValueGetValue(v as! AXValue, .cgRect, &r), r.width > 0, r.height > 0,
               r.width.isFinite, r.height.isFinite else { return nil }
+        r.origin.y += shiftY
         return cocoa(r)
     }
 

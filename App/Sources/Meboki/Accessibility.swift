@@ -75,11 +75,18 @@ enum AX {
 
     /// Element frame converted from AX (top-left origin of the primary screen) to Cocoa coordinates.
     static func frame(_ el: AXUIElement) -> CGRect? {
+        guard var r = axFrame(el) else { return nil }
+        if let shift = VCLGeometry.elementShift(el) { r.origin.y += shift }
+        return cocoa(r)
+    }
+
+    /// Element frame as AX reports it (top-left origin, y down), with no app quirk applied.
+    static func axFrame(_ el: AXUIElement) -> CGRect? {
         guard let p = copy(el, kAXPositionAttribute), let s = copy(el, kAXSizeAttribute),
               CFGetTypeID(p) == AXValueGetTypeID(), CFGetTypeID(s) == AXValueGetTypeID() else { return nil }
         var point = CGPoint.zero, size = CGSize.zero
         guard AXValueGetValue(p as! AXValue, .cgPoint, &point), AXValueGetValue(s as! AXValue, .cgSize, &size) else { return nil }
-        return cocoa(CGRect(origin: point, size: size))
+        return CGRect(origin: point, size: size)
     }
 
     /// AX global coordinates (top-left origin of the primary screen, y down) → Cocoa (bottom-left, y up).
@@ -139,6 +146,9 @@ enum AX {
     /// The part of `el` the user can see: its frame clipped to its scroll area and window. Nil if unknown.
     static func visibleFrame(_ el: AXUIElement) -> CGRect? {
         var clip = frame(el)
+        // A field frame that lies wholly outside its own window is wrong (an app that flips y with the wrong
+        // screen height): clip to the window, which apps report correctly, so bounds can still be checked.
+        if let own = clip, let w = window(of: el).flatMap(frame), !own.intersects(w) { clip = w }
         for other in [scrollArea(around: el), window(of: el)].compactMap({ $0 }) {
             guard let f = frame(other) else { continue }
             clip = clip.map { $0.intersection(f) } ?? f
@@ -181,15 +191,40 @@ enum AX {
     /// The last field whose visible range fell back to the whole field (logged once).
     nonisolated(unsafe) private static var fallbackLogged: AXUIElement?
 
-    /// A multi-line text area the user can type in (the checking-as-you-type target), or an editable web area
-    /// (Mail compose). Single-line fields (URL bars, search boxes, forms) and read-only text (terminal output)
-    /// are left to the hotkey.
+    /// A multi-line text area the user can type in (the checking-as-you-type target), an editable web area
+    /// (Mail compose), or a prose field that reports as single-line (`isProseTextField`). Other single-line
+    /// fields (URL bars, search boxes, forms) and read-only text (terminal output) are left to the hotkey.
     static func isEditableTextArea(_ el: AXUIElement) -> Bool {
         let role = string(el, kAXRoleAttribute)
-        guard role == (kAXTextAreaRole as String) || role == "AXWebArea" else { return false }
+        guard role == (kAXTextAreaRole as String) || role == "AXWebArea" || isProseTextField(el) else { return false }
+        return isValueSettable(el)
+    }
+
+    private static func isValueSettable(_ el: AXUIElement) -> Bool {
         var settable = DarwinBoolean(false)
         guard AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &settable) == .success else { return false }
         return settable.boolValue
+    }
+
+    /// Apps whose prose fields report as single-line `AXTextField`s, with the `AXIdentifier`s that qualify (nil:
+    /// any plain text field with no description). Messages: the Catalyst composer, which grows to several lines
+    /// (its search box is an `AXSearchField`). Reminders: the title and notes of each reminder (the sidebar's
+    /// list names are text fields too, but carry the list name as their description). 2026-11-20.
+    private static let proseTextFields: [String: Set<String>?] = [
+        "com.apple.MobileSMS": ["messageBodyField"],
+        "com.apple.reminders": nil,
+    ]
+
+    /// An `AXTextField` that holds prose in an app listed in `proseTextFields`: checked as you type like a text area.
+    static func isProseTextField(_ el: AXUIElement) -> Bool {
+        guard string(el, kAXRoleAttribute) == (kAXTextFieldRole as String),
+              (string(el, kAXSubroleAttribute) ?? "").isEmpty else { return false }
+        var pid: pid_t = 0
+        guard AXUIElementGetPid(el, &pid) == .success,
+              let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier,
+              let rule = proseTextFields[id] else { return false }
+        if let ids = rule { return string(el, kAXIdentifierAttribute).map(ids.contains) ?? false }
+        return (string(el, kAXDescriptionAttribute) ?? "").isEmpty
     }
 
     /// The app gives real text bounds for `text` in `el`: two different characters get two different, non-empty
@@ -223,6 +258,20 @@ enum AX {
         "com.google.Chrome", "org.chromium", "com.brave.Browser", "com.microsoft.edgemac",
         "company.thebrowser", "com.vivaldi", "com.operasoftware",
     ]
+
+    /// Gecko apps (Firefox and its forks, Thunderbird).
+    private static let geckoBundlePrefixes = [
+        "org.mozilla.", "app.zen-browser.", "io.gitlab.librewolf-community", "net.waterfox.", "one.ablaze.floorp",
+    ]
+
+    /// Gecko's `AXSelectedText` setter ignores the selection it reports: in a `contenteditable` it replaced the
+    /// whole field with the replacement, in a `<textarea>` it wrote at another offset (Firefox, 2026-11-20), while
+    /// `AXSelectedTextRange` and `AXSelectedText` read back the range asked for, so `select`'s proof can't catch
+    /// it. These apps are written by select + paste only.
+    static func neverWritesByAccessibility(pid: pid_t) -> Bool {
+        guard let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier else { return false }
+        return geckoBundlePrefixes.contains(where: { id.hasPrefix($0) })
+    }
 
     /// Electron apps and Chromium browsers keep their accessibility tree off until asked (PLAN.md §5).
     static func prepare(app: NSRunningApplication) {
@@ -369,7 +418,7 @@ enum AX {
         }
 
         var written = false
-        if !pasteOnly, !isEditableWebArea(el) {
+        if !pasteOnly, !isEditableWebArea(el), !neverWritesByAccessibility(pid: pid) {
             // The selection is proven (its text is `original`) before anything is written: Chrome's offsets can
             // land elsewhere while reading back as the range asked for.
             written = select(el, range, in: before) && setSelectedText(el, replacement)
