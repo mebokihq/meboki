@@ -94,7 +94,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Settings/Shortcut.swift       recorded global shortcut (key code, Carbon modifiers, glyphs), macOS-shortcut conflict check
   Settings/SettingsWindow.swift Settings window (800 × 580 default, resizable to min 800 × 500, size remembered in `settingsWindowSize`; traffic lights in the glass sidebar, search, toast), SettingsModel, recorder key monitor
   Settings/SettingsComponents.swift  group, row, key field, footnote, app icon
-  Settings/Panes/*.swift        General (style picker art, hotkey field), Appearance (tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts, Privacy, Licence (status card, buy, key field, remove), About
+  Settings/Panes/*.swift        General (style picker art), Appearance (tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts (hotkey field), Privacy, Licence (status card, buy, key field, remove), About
   Settings/LicenceLock.swift    free-mode lock marks: `LicenceGate` (environment), `.licenceLocked(_:caption:)`, `NeedsLicencePopover`, `FreeModeBanner`; `DSSegmented(locked:onLockedTap:)`
   Settings/SettingsDemo.swift   DEBUG `--settings-demo <pane>` for screenshots (see the demo flags under Commands)
   Updates/UpdateController.swift  Sparkle wrapper: on only with a feed in Info.plist, gentle reminder state (`available`, `needsAttention`), the two switches, install at a quiet moment; DEBUG `MEBOKI_DEMO_UPDATE=<version>` (+ `MEBOKI_DEMO_UPDATE_DAYS=<n>`) fakes a found version for the demo flags and `--demo-popups --all`

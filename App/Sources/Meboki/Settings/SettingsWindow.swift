@@ -71,7 +71,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         switch self {
         case .general:
             ["Correction popup", "Glass card", "Anchored bubble", "Island HUD", "Return key", "Launch at login",
-             "Show in menu bar", "Underline mistakes as I type", "Shortcut", "Check text", "Hotkey", "Updates",
+             "Show in menu bar", "Underline mistakes as I type", "Updates",
              "Check for updates automatically", "Install updates automatically"]
         case .appearance: ["Color tone", "Colors", "Vivid", "Eased", "Muted", "Dusty", "Bright", "Theme", "Preview"]
         case .writing:
@@ -204,8 +204,10 @@ struct SettingsRootView: View {
         HStack(spacing: 0) {
             SettingsSidebar(model: model)
                 .frame(width: 224)
+            // `minWidth: 0`: a pane wider than the content area must never widen the HStack, or the whole
+            // layout is re-centered at a fractional x and the sidebar icons shift inside their squares.
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                 .clipped()
         }
         // A new color tone redraws the whole window, so every brand and category color picks it up at once.

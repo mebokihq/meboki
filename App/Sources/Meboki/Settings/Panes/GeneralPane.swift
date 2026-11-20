@@ -1,7 +1,7 @@
 import MebokiCore
 import SwiftUI
 
-/// Settings › General (design_code.md §8.1): popup style picker, Return key, App group, the shortcut.
+/// Settings › General (design_code.md §8.1): popup style picker, Return key, App group, updates.
 struct GeneralPane: View {
     @ObservedObject var model: SettingsModel
     @ObservedObject var settings: AppSettings
@@ -19,13 +19,6 @@ struct GeneralPane: View {
                 SettingsDivider()
                 SettingsRow("Return key", subtitle: "⏎ applies all fixes. ⇧⏎ applies only the current one.") {
                     KeyField(glyphs: ["⏎"])
-                }
-            }
-
-            SettingsGroupHeader("Shortcut")
-            SettingsGroup {
-                SettingsRow("Check text", subtitle: "Proofreads the focused field, or the selection if there is one") {
-                    HotkeyField(model: model, shortcut: settings.hotkey)
                 }
             }
 
@@ -76,47 +69,6 @@ struct GeneralPane: View {
                 }
             }
         }
-    }
-}
-
-/// The hotkey field (§8.1): one keycap per key; a click records a new shortcut ("Type a new shortcut…" in
-/// brand semibold with a 2 pt brand ring). `SettingsWindowController` takes the key presses.
-struct HotkeyField: View {
-    @ObservedObject var model: SettingsModel
-    let shortcut: Shortcut
-
-    var body: some View {
-        Button { model.recording.toggle() } label: {
-            Group {
-                if model.recording {
-                    Text("Type a new shortcut…")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(DS.brand)
-                        .padding(.horizontal, 10)
-                        // Same height as the keycaps, so the row doesn't jump.
-                        .frame(height: 31)
-                } else {
-                    HStack(spacing: 3) {
-                        ForEach(shortcut.glyphs.indices, id: \.self) { i in
-                            Text(shortcut.glyphs[i])
-                                .font(.system(size: 12.5, weight: .medium))
-                                .foregroundStyle(DS.text)
-                                .fixedSize()
-                                .padding(.vertical, 4)
-                                .padding(.horizontal, 7)
-                                .background(RoundedRectangle(cornerRadius: DS.Radius.kbd, style: .continuous)
-                                    .fill(DS.control))
-                        }
-                    }
-                    .padding(4)
-                }
-            }
-            .background(KeyFieldBackground(recording: model.recording))
-            .contentShape(RoundedRectangle(cornerRadius: DS.Radius.field, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(model.recording ? "Type a new shortcut" : "Shortcut \(Kbd.spoken(shortcut.display))")
-        .accessibilityHint("Click to record a new shortcut. Escape cancels.")
     }
 }
 
