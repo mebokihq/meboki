@@ -95,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         /// The app gives real text bounds there (measured on the first text with letters). Without them the
         /// automatic check stays off in this field: it shows underlines only, never a card below the field.
         var bounds: Bool?
+        /// Measurements that found no bounds so far. Electron and Chromium rebuild their accessibility tree
+        /// for a moment when the app comes back to the front, so one miss isn't trusted (`noBoundsYet`).
+        var boundsMisses = 0
         /// The text last handed to the scheduler: a caret move that leaves it the same needs no new pass.
         var requested: String?
         /// The text seen at the last edit or focus, checked or not (an empty field too): a later different text
@@ -109,6 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// refocusing a field doesn't count again.
     private var learnSeen: [String: [AXUIElement]] = [:]
     private var autoTarget: AutoTarget?
+    /// The pending re-measure after a no-bounds miss (`noBoundsYet`); cancelled when focus moves.
+    private var boundsRetry: DispatchWorkItem?
     /// Checks the focused field after a typing pause while no review is up; a live review takes over once
     /// the check found fixes.
     private var autoScheduler: CheckScheduler?
@@ -1694,14 +1699,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if s.auto {
             // Underlines only. Fixes scrolled out of view still count: a scroll brings their underlines.
             guard let layout else {
-                Log.write("auto: no text bounds in \(app); automatic check off in this field")
                 session = nil
-                if let t = autoTarget, CFEqual(t.element, s.snapshot.element) { autoTarget?.bounds = false }
+                if let t = autoTarget, CFEqual(t.element, s.snapshot.element) { noBoundsYet() }
                 return
             }
             s.mode = .underlines
             s.probe = layout.probe
             session = s
+            // Underlines are up: earlier misses were the app settling (`noBoundsYet`), not a field without bounds.
+            if let t = autoTarget, CFEqual(t.element, s.snapshot.element) { autoTarget?.boundsMisses = 0 }
             overlay.show(layout.marks, clip: layout.clip)
             watch(s, observeField: true)
             Log.write("review: auto, \(layout.marks.count) of \(s.list.fixes.count) fix(es) underlined in \(app)")
@@ -1811,6 +1817,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         s.probe = layout.probe
         session = s
+        if overlay.stale { logTypingGuess(against: layout.marks) }
         overlay.show(layout.marks, clip: layout.clip)
         guard popup.isVisible else { return }
         if let c = s.list.current, let word = layout.marks.first(where: { $0.fix == c })?.rects.first {
@@ -1965,19 +1972,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             scheduleValueCheck(after: 0.52 - Date().timeIntervalSince(t))
             return false
         }
-        guard let change = TextChange.between(s.list.text, now), s.list.textEdited(change) else { return false }
+        guard let change = TextChange.between(s.list.text, now) else { return false }
+        let removed = (s.list.text as NSString).substring(with: change.range)
+        let before = s.list
+        guard let remap = s.list.textEdited(change) else { return false }
         s.fieldText = now
         session = s
         Log.write("review: field edited at \(change.range.location) (\(change.delta >= 0 ? "+" : "")\(change.delta)), "
             + "\(s.list.pendingCount) pending")
-        // The indices moved: no card on a fix that moved, no clicks on the old marks (a suspended overlay
-        // doesn't hit-test) until the redraw.
+        // The indices moved: no card on a fix that moved, and no clicks on the old marks until the redraw.
         popup.hide()
         overlay.current = nil
-        scheduleRelayout(after: 0.05)
+        if s.mode == .underlines, overlay.alphaValueIsShown {
+            // Typing: keep the underlines that can't have moved instead of blinking them all off and on per key.
+            keepUnderlines(after: change, removed: removed, before: before, remap: remap, in: s)
+            scheduleRelayout(after: 0.05, suspend: false)
+        } else {
+            scheduleRelayout(after: 0.05)
+        }
         showLiveIsland()
         requestLiveCheck(s, typing: true)
         return true
+    }
+
+    /// After an edit in a live review, until the relayout measures again: the marks of fixes before the edit
+    /// stay; a fix after it stays on lines other than the edited one when the edit is small and on one line
+    /// (a typed or deleted letter only moves the rest of its own line, unless a word wraps, which the
+    /// relayout 50 ms later corrects). A line break or a bigger edit (paste, autocorrect) moves everything
+    /// after it, so those marks go until the relayout.
+    private func keepUnderlines(after change: TextChange, removed: String, before: FixList, remap: [Int: Int], in s: Session) {
+        let hasBreak = { (t: String) in t.unicodeScalars.contains { CharacterSet.newlines.contains($0) || $0 == "\u{FFFC}" } }
+        let small = !hasBreak(removed) && !hasBreak(change.replacement)
+            && (removed as NSString).length + (change.replacement as NSString).length <= 3
+        // The edited line on screen: the character before the caret, in the field's new text.
+        let end = s.scopeLocation + change.range.location + (change.replacement as NSString).length
+        let line: CGRect? = small && end > 0
+            ? AX.bounds(s.snapshot.element, NSRange(location: end - 1, length: 1), text: s.fieldText)
+            : nil
+        overlay.retarget(remap) { old, rect in
+            guard before.fixes.indices.contains(old) else { return false }
+            // Fixes before the edit don't move.
+            if NSMaxRange(before.fixes[old].currentRange) <= change.range.location { return true }
+            // After it: only lines other than the edited one, and only when that line is known.
+            guard let line, line.height > 0 else { return false }
+            return !(rect.minY < line.maxY && line.minY < rect.maxY)
+        }
+    }
+
+    /// Logs when underlines kept on screen while typing (`keepUnderlines`) turned out to sit somewhere else
+    /// once measured: a word wrapped, or the app laid out late. Silent when the guess was right.
+    private func logTypingGuess(against measured: [UnderlineMark]) {
+        var kept = 0, sideways = 0, lines = 0
+        for mark in overlay.marks {
+            let now = measured.first { $0.fix == mark.fix }?.rects ?? []
+            for r in mark.rects {
+                kept += 1
+                if now.contains(where: { abs($0.minX - r.minX) < 1 && abs($0.minY - r.minY) < 1 }) { continue }
+                if now.contains(where: { abs($0.minY - r.minY) < 1 }) { sideways += 1 } else { lines += 1 }
+            }
+        }
+        if sideways + lines > 0 {
+            Log.write("review: \(sideways + lines) of \(kept) underline(s) kept while typing had moved "
+                + "(\(sideways) along the line, \(lines) to another line)")
+        }
     }
 
     /// Island style in a live review: the island follows the current fix, and hides while nothing is pending.
@@ -2460,6 +2517,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// after a pause (a field that already holds text gets underlined without typing).
     private func autoFocusChanged(_ el: AXUIElement?, pid: pid_t) {
         stopAutoCheck()
+        boundsRetry?.cancel()
+        boundsRetry = nil
         autoTarget = nil
         // Focus moved to another element: the mute ends. Nil focus (an Electron window while our panel is key, a
         // re-attach) keeps it, since focus usually comes back to the same field.
@@ -2521,11 +2580,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             autoTarget = t
         }
         if t.bounds == nil {
-            let bounds = AX.hasTextBounds(t.element, text: text, visible: AX.visibleCharacterRange(t.element))
-            t.bounds = bounds
+            // A re-measure is already due: it runs this request then (typing meanwhile doesn't count as misses).
+            if boundsRetry != nil { return }
+            guard AX.hasTextBounds(t.element, text: text, visible: AX.visibleCharacterRange(t.element)) else {
+                noBoundsYet()
+                return
+            }
+            t.bounds = true
             autoTarget = t
-            let app = NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier ?? "pid \(t.pid)"
-            if !bounds { Log.write("auto: no text bounds in \(app); automatic check off in this field (⌃⌥G still works)") }
         }
         guard t.bounds == true else { return }
         guard let backend = checkBackend() else {
@@ -2554,6 +2616,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             await pipe.setOptions(options)
             await scheduler.textChanged(text, scope: scope)
         }
+    }
+
+    /// The target gave no text bounds. Right after its app comes back to the front, Electron and Chromium
+    /// answer from a half-built accessibility tree (Notion: "2 text leaves, 0 lined up"), so the field is
+    /// measured again after 0.4 s and 1.2 s; only a third miss turns the automatic check off in this field.
+    private func noBoundsYet() {
+        guard var t = autoTarget, boundsRetry == nil else { return }
+        t.boundsMisses += 1
+        t.bounds = nil
+        let app = NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier ?? "pid \(t.pid)"
+        guard t.boundsMisses < 3 else {
+            t.bounds = false
+            autoTarget = t
+            Log.write("auto: no text bounds in \(app); automatic check off in this field (⌃⌥G still works)")
+            return
+        }
+        t.requested = nil
+        autoTarget = t
+        let el = t.element
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.boundsRetry = nil
+            guard let t = self.autoTarget, CFEqual(t.element, el), t.bounds == nil, self.session == nil else { return }
+            self.requestAutoCheck()
+        }
+        boundsRetry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + (t.boundsMisses == 1 ? 0.4 : 1.2), execute: work)
     }
 
     /// Learned Manual: counts this field's verdict for its app (once per field). When the app has just been

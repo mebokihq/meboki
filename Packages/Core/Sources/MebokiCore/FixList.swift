@@ -213,11 +213,12 @@ public struct FixList: Equatable, Sendable {
     /// - any fix the change touches: overlaps it, or sits right next to it. Typing a space or punctuation
     ///   right after or before a fixed word doesn't touch it; typing a letter there does (the word grew).
     ///   An insertion fix (an added comma) is touched by anything at its point.
-    /// Returns false, changing nothing, when `change` doesn't fit `text`.
+    /// Returns where each kept fix went (old index → new index), or nil, changing nothing, when `change`
+    /// doesn't fit `text`. Fixes missing from the map left the list.
     @discardableResult
-    public mutating func textEdited(_ change: TextChange) -> Bool {
+    public mutating func textEdited(_ change: TextChange) -> [Int: Int]? {
         let ns = text as NSString
-        guard change.range.location >= 0, NSMaxRange(change.range) <= ns.length else { return false }
+        guard change.range.location >= 0, NSMaxRange(change.range) <= ns.length else { return nil }
         let c = change.range
         let sentences = CheckPipeline.sentences(in: ns, range: ns.paragraphRange(for: c))
             .filter { Self.touchesSentence(change, $0) }
@@ -242,7 +243,7 @@ public struct FixList: Equatable, Sendable {
             let at = old.location >= NSMaxRange(c) ? old.location + change.delta : old.location
             current = newIndex[old.index] ?? nearestPending(to: at)
         }
-        return true
+        return newIndex
     }
 
     /// A check of the current `text` (or part of it) came back. Inside the `covered` ranges (the paragraphs

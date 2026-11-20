@@ -35,8 +35,8 @@ import Testing
     /// The user changes the field from `old` to `new`.
     static func type(_ l: inout FixList, _ old: String, _ new: String) throws {
         let c = try #require(TextChange.between(old, new))
-        let ok = l.textEdited(c)
-        #expect(ok)
+        let map = l.textEdited(c)
+        #expect(map != nil)
         #expect(l.text == new)
     }
     static func originals(_ l: FixList) -> [String] { l.fixes.map(\.edit.original) }
@@ -56,6 +56,16 @@ import Testing
         #expect(l.text == new)
         #expect(Self.originals(l) == ["teh", "was", "tomorow"])
         #expect(Self.consistent(l))
+    }
+
+    @Test func editReturnsWhereKeptFixesWent() throws {
+        var l = Self.list()
+        let new = Self.text.replacingOccurrences(of: "We was late.", with: "We was very late.")
+        let map = l.textEdited(try #require(TextChange.between(Self.text, new)))
+        // "was" left the list; "tomorow" moved from index 2 to 1.
+        #expect(map == [0: 0, 2: 1])
+        var m = Self.list()
+        #expect(m.textEdited(TextChange(range: NSRange(location: 999, length: 0), replacement: "x")) == nil)
     }
 
     @Test func typingInASentenceDropsItsPendingFixes() throws {

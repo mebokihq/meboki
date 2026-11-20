@@ -40,6 +40,8 @@ final class UnderlineOverlay {
     }
 
     var isVisible: Bool { panel.isVisible }
+    /// On screen and not suspended.
+    var alphaValueIsShown: Bool { panel.isVisible && panel.alphaValue > 0 }
     var marks: [UnderlineMark] { view.marks }
     /// The visible part of the field the marks were last shown over (screen, Cocoa); `.null` when hidden.
     private(set) var clip: CGRect = .null
@@ -56,9 +58,19 @@ final class UnderlineOverlay {
         set { if view.hovered != newValue { view.hovered = newValue; view.needsDisplay = true } }
     }
 
+    /// The marks are a typing guess (`retarget`), not a measurement: drawn, but no hit-testing until the next
+    /// `show`, so a click can't open a fix at the wrong spot.
+    private(set) var stale = false
+
     /// Shows `marks` over `clip` (the visible part of the field). Marks are drawn only inside `clip`.
     func show(_ marks: [UnderlineMark], clip: CGRect) {
         let frame = clip.insetBy(dx: -Self.margin, dy: -Self.margin).integral
+        let wasStale = stale
+        stale = false
+        // Nothing changed (a re-check that found the same fixes, a relayout after typing that moved nothing):
+        // no repaint.
+        if !wasStale, panel.isVisible, panel.alphaValue == 1, panel.frame == frame, self.clip == clip,
+           view.marks == marks { return }
         if panel.frame != frame { panel.setFrame(frame, display: false) }
         self.clip = clip
         view.clip = clip.offsetBy(dx: -frame.minX, dy: -frame.minY)
@@ -74,9 +86,30 @@ final class UnderlineOverlay {
         panel.alphaValue = 0
     }
 
+    /// The user typed: keeps the underlines on screen instead of blinking them off until the relayout
+    /// measures them again. `remap` says where each kept fix went (old index → new index; fixes missing from
+    /// it left the list), and `keep` decides, per old mark and line rect, whether that rect can stay where it
+    /// is (text before the edit, or on other lines, doesn't move for a small edit). Until the next `show`
+    /// the marks don't hit-test.
+    func retarget(_ remap: [Int: Int], keep: (_ oldFix: Int, _ rect: CGRect) -> Bool) {
+        guard panel.isVisible else { return }
+        var marks: [UnderlineMark] = []
+        for m in view.marks {
+            guard let n = remap[m.fix] else { continue }
+            let rects = m.rects.filter { keep(m.fix, $0) }
+            if !rects.isEmpty { marks.append(UnderlineMark(fix: n, rects: rects, category: m.category)) }
+        }
+        stale = true
+        view.marks = marks
+        view.current = nil
+        view.hovered = nil
+        view.needsDisplay = true
+    }
+
     func hide() {
         panel.orderOut(nil)
         clip = .null
+        stale = false
         view.marks = []
         view.current = nil
         view.hovered = nil
@@ -85,7 +118,7 @@ final class UnderlineOverlay {
 
     /// The fix whose underlined word (or the wave under it) is at `point` (screen, Cocoa), and that line's rect.
     func hit(_ point: CGPoint) -> (fix: Int, rect: CGRect)? {
-        guard panel.isVisible, panel.alphaValue > 0 else { return nil }
+        guard panel.isVisible, panel.alphaValue > 0, !stale else { return nil }
         guard clip.insetBy(dx: -2, dy: -6).contains(point) else { return nil }
         for mark in view.marks {
             for r in mark.rects where Self.hitRect(r).contains(point) { return (mark.fix, r) }
