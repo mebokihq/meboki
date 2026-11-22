@@ -62,7 +62,7 @@ struct AnchoredBubble: View {
         }
         .padding(12)
         .frame(width: Self.width, alignment: .leading)
-        .background(GlassBackground(shape: shape, tint: DS.glassStrong))
+        .background(GlassBackground(shape: shape, tint: DS.glassStrong, popup: true))
         .overlay(alignment: tip.above ? .bottomLeading : .topLeading) {
             BubbleTipView(above: tip.above)
                 .offset(x: tip.x, y: tip.above ? 7 : -7)
@@ -151,16 +151,26 @@ private struct BubbleTipView: View {
     let above: Bool
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.dsPopupOpacity) private var opacityOverride
 
     var body: some View {
         let high = contrast.isIncreased
         let solid = high || reduceTransparency
+        let o = opacityOverride ?? DS.popupOpacity
         let shape = UnevenRoundedRectangle(topLeadingRadius: above ? 0 : 3, bottomTrailingRadius: above ? 3 : 0,
                                            style: .continuous)
         // A plain `glassStrong` fill (86–88% opaque), no blur: an `NSVisualEffectView` measured inside this
-        // overlay trips an AppKit layout assertion, and the blur would barely show through anyway.
+        // overlay trips an AppKit layout assertion, and the blur would barely show through anyway. It follows
+        // the popup opacity like the bubble's glass (`DS.popupGlass`, `DS.popupSolid`).
         ZStack {
-            shape.fill(solid ? DS.window : DS.glassStrong)
+            if solid {
+                shape.fill(DS.window)
+            } else {
+                // The tip has no blur, so its tint alone covers what the bubble's blur and tint cover together.
+                let g = DS.popupGlass(o)
+                shape.fill(DS.glassStrong).opacity(g < 1 ? min(1, g / max(0.01, DS.alpha(of: DS.glassStrong))) : 1)
+                shape.fill(DS.window.opacity(DS.popupSolid(o)))
+            }
             TipEdges(above: above).stroke(high ? DS.separatorHigh : DS.edge, lineWidth: high ? 1 : 0.5)
         }
         .frame(width: 14, height: 14)

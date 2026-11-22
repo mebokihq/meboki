@@ -91,7 +91,8 @@ struct GlassCard: View {
         }
         .padding(EdgeInsets(top: 16, leading: 16, bottom: 12, trailing: 16))
         .frame(width: 420, alignment: .leading)
-        .background(GlassBackground(shape: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous)))
+        .background(GlassBackground(shape: RoundedRectangle(cornerRadius: DS.Radius.card, style: .continuous),
+                                    popup: true))
         .dsShadow(DS.windowShadow)
     }
 

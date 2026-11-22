@@ -373,11 +373,14 @@ private struct MenuBarStrip: View {
     }
 }
 
-/// The underline overlay's wavy line (`UnderlineOverlay.wave`): wavelength 4 pt, amplitude 1.5 pt.
+/// The underline overlay's wavy line (`UnderlineOverlay.wave`) at a given curve (`DS.waveAmplitude`,
+/// `DS.waveLength`; standard: wavelength 4 pt, amplitude 1.5 pt).
 struct WaveLine: Shape {
+    var curve: Double = DS.underlineCurve
+
     func path(in r: CGRect) -> Path {
         var p = Path()
-        let y = r.midY, amp: CGFloat = 1.5, half: CGFloat = 2
+        let y = r.midY, amp = DS.waveAmplitude(curve), half = DS.waveLength(curve) / 2
         p.move(to: CGPoint(x: r.minX, y: y))
         var x = r.minX, up = true
         while x < r.maxX {

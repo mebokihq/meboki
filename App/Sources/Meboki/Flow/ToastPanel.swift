@@ -23,7 +23,7 @@ struct ToastRoot: View {
         if let c = content {
             ToastView(kind: c.kind, title: c.title, detail: c.detail, symbol: c.symbol,
                       actionTitle: c.actionTitle,
-                      action: c.action.map { action in { action(); dismiss() } })
+                      action: c.action.map { action in { action(); dismiss() } }, popup: true)
                 .modifier(PopInModifier(active: !appear.shown))
         }
     }

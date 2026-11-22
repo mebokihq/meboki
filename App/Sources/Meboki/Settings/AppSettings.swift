@@ -89,6 +89,15 @@ final class AppSettings: ObservableObject {
         let tone = ColorTone(rawValue: defaults.string(forKey: Key.colorTone) ?? "") ?? .muted
         colorTone = tone
         DS.tone = tone
+        let opacity = (defaults.object(forKey: Key.popupOpacity) as? Double).map { min(1, max(0, $0)) }
+            ?? DS.popupOpacityDefault
+        popupOpacity = opacity
+        DS.popupOpacity = opacity
+        PopupLook.shared.opacity = opacity
+        let curve = (defaults.object(forKey: Key.underlineCurve) as? Double).map { min(1, max(0, $0)) }
+            ?? DS.underlineCurveDefault
+        underlineCurve = curve
+        DS.underlineCurve = curve
         modelSource = ModelSource(rawValue: defaults.string(forKey: Key.modelSource) ?? "") ?? .local
         cloudProvider = CloudProvider(rawValue: defaults.string(forKey: Key.cloudProvider) ?? "") ?? .openRouter
         cloudModelIDs = defaults.dictionary(forKey: Key.cloudModelIDs) as? [String: String] ?? [:]
@@ -122,6 +131,8 @@ final class AppSettings: ObservableObject {
         static let lastSettingsPane = "lastSettingsPane"
         static let settingsWindowSize = "settingsWindowSize"
         static let colorTone = "colorTone"
+        static let popupOpacity = "popupOpacity"
+        static let underlineCurve = "underlineCurve"
         static let modelSource = "modelSource"
         static let cloudProvider = "cloudProvider"
         static let cloudModelIDs = "cloudModelIDs"
@@ -237,6 +248,26 @@ final class AppSettings: ObservableObject {
         didSet {
             DS.tone = colorTone
             defaults.set(colorTone.rawValue, forKey: Key.colorTone)
+        }
+    }
+
+    /// Settings › Appearance: how opaque the correction popups are, 0 (most transparent) … 1 (solid). Default
+    /// `DS.popupOpacityDefault`, the standard glass. Sets `DS.popupOpacity`, read when a popup is drawn.
+    @Published var popupOpacity: Double {
+        didSet {
+            DS.popupOpacity = popupOpacity
+            PopupLook.shared.opacity = popupOpacity
+            defaults.set(popupOpacity, forKey: Key.popupOpacity)
+        }
+    }
+
+    /// Settings › Appearance: how curvy the wavy underline is, 0 (flattest, still wavy) … 1 (standard, the
+    /// default). Sets `DS.underlineCurve`, read when the underline overlay draws.
+    @Published var underlineCurve: Double {
+        didSet {
+            DS.underlineCurve = underlineCurve
+            defaults.set(underlineCurve, forKey: Key.underlineCurve)
+            NotificationCenter.default.post(name: .underlineLookChanged, object: nil)
         }
     }
 

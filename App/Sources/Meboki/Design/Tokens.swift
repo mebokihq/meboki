@@ -79,6 +79,65 @@ extension DS {
     static let knobShadow = Color.black.opacity(0.3)
 }
 
+// MARK: - Popup opacity (Settings › Appearance)
+
+extension DS {
+    /// How opaque the correction popups are (card, bubble, island, toasts), 0 … 1. `popupOpacityDefault` is the
+    /// standard glass; above it a solid `window` layer fades in over the glass (1 = solid), below it the glass
+    /// itself fades out (0 = most transparent). Set on the main actor by `AppSettings.popupOpacity`.
+    nonisolated(unsafe) static var popupOpacity: Double = popupOpacityDefault
+    static let popupOpacityDefault = 0.5
+    /// The glass layers' opacity at 0 %: enough blur and tint left to read the text.
+    private static let popupGlassFloor = 0.35
+    /// The island's fill at 0 %: white text stays readable over a light wallpaper.
+    private static let popupHUDFloor = 0.55
+
+    /// Opacity of the solid `window` layer over popup glass: 0 up to the default, 1 at 100 %.
+    static func popupSolid(_ o: Double = popupOpacity) -> Double {
+        let d = popupOpacityDefault
+        return o <= d ? 0 : min(1, (o - d) / (1 - d))
+    }
+
+    /// Opacity of the popup glass (blur and tint): 1 from the default up, `popupGlassFloor` at 0 %.
+    static func popupGlass(_ o: Double = popupOpacity) -> Double {
+        let d = popupOpacityDefault
+        return o >= d ? 1 : popupGlassFloor + (1 - popupGlassFloor) * max(0, o) / d
+    }
+
+    /// Alpha for the blur layer under a tint of `tintAlpha` faded to `glass`, so blur and tint together let
+    /// exactly `1 − glass` of the backdrop through, like one layer at `glass`: (1 − b)(1 − glass·t) = 1 − glass.
+    static func popupBlurAlpha(glass: Double, tintAlpha t: Double) -> Double {
+        let g = min(1, max(0, glass)), cover = g * min(1, max(0, t))
+        guard g < 1, cover < 1 else { return 1 }
+        return max(0, 1 - (1 - g) / (1 - cover))
+    }
+
+    /// Alpha of a (possibly light/dark dynamic) color in the current appearance; 1 when it can't be read.
+    static func alpha(of color: Color) -> Double {
+        NSColor(color).usingColorSpace(.sRGB).map { Double($0.alphaComponent) } ?? 1
+    }
+
+    /// Opacity of the island's dark fill: opaque from the default up, `popupHUDFloor` at 0 %.
+    static func popupHUD(_ o: Double = popupOpacity) -> Double {
+        let d = popupOpacityDefault
+        return o >= d ? 1 : popupHUDFloor + (1 - popupHUDFloor) * max(0, o) / d
+    }
+}
+
+// MARK: - Underline wave (Settings › Appearance)
+
+extension DS {
+    /// How curvy the wavy underline is, 0 (flattest, still wavy) … 1 (the standard wave, the default). Set on the
+    /// main actor by `AppSettings.underlineCurve`; read when underlines are drawn.
+    nonisolated(unsafe) static var underlineCurve: Double = underlineCurveDefault
+    static let underlineCurveDefault = 1.0
+
+    /// Wave amplitude: 1.5 pt at 100 %, 0.4 pt at 0 % (never a straight line).
+    static func waveAmplitude(_ c: Double = underlineCurve) -> CGFloat { 0.4 + 1.1 * CGFloat(min(1, max(0, c))) }
+    /// Wavelength: 4 pt at 100 %, stretching to 6 pt at 0 % so a flat wave reads as gentle, not as fuzz.
+    static func waveLength(_ c: Double = underlineCurve) -> CGFloat { 6 - 2 * CGFloat(min(1, max(0, c))) }
+}
+
 // MARK: - Color tone (Settings › Appearance)
 
 /// How vivid the brand and category colors are. Each tone keeps the hue of the original colors and lowers their

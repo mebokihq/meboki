@@ -2,6 +2,11 @@ import AppKit
 import MebokiCore
 import SwiftUI
 
+extension Notification.Name {
+    /// The underline wave changed (`AppSettings.underlineCurve`): the overlay repaints.
+    static let underlineLookChanged = Notification.Name("MebokiUnderlineLookChanged")
+}
+
 /// One fix's underline: its line rects on screen (Cocoa coordinates) and its category.
 struct UnderlineMark: Equatable {
     var fix: Int
@@ -37,6 +42,10 @@ final class UnderlineOverlay {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.contentView = view
         view.wantsLayer = true
+        // Settings › Appearance › Wave: repaint underlines already on screen (`show` skips unchanged marks).
+        NotificationCenter.default.addObserver(forName: .underlineLookChanged, object: nil, queue: .main) {
+            [weak self] _ in MainActor.assumeIsolated { self?.view.needsDisplay = true }
+        }
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -199,13 +208,14 @@ private final class UnderlineView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    /// Wavy line: 1.5 pt stroke, wavelength 4 pt, amplitude 1.5 pt, centered on `y`.
+    /// Wavy line: 1.5 pt stroke, centered on `y`. Wavelength 4 pt and amplitude 1.5 pt at the standard curve;
+    /// Settings › Appearance › Wave flattens it (`DS.waveAmplitude`, `DS.waveLength`).
     static func wave(from x0: CGFloat, to x1: CGFloat, y: CGFloat) -> NSBezierPath {
         let path = NSBezierPath()
         path.lineWidth = 1.5
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
-        let amplitude: CGFloat = 1.5, wavelength: CGFloat = 4, step: CGFloat = 0.5
+        let amplitude = DS.waveAmplitude(), wavelength = DS.waveLength(), step: CGFloat = 0.5
         var x = x0
         path.move(to: CGPoint(x: x, y: y + amplitude))
         while x < x1 {

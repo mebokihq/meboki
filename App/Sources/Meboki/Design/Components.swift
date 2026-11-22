@@ -412,6 +412,8 @@ struct ToastView: View {
     var symbol: String?
     var actionTitle: String?
     var action: (() -> Void)?
+    /// A toast of the correction flow (`ToastPanel`): follows the popup opacity setting.
+    var popup = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -428,7 +430,7 @@ struct ToastView: View {
         .padding(.horizontal, 10)
         .frame(maxWidth: 560, alignment: .leading)
         .fixedSize()
-        .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 999, style: .continuous)))
+        .background(GlassBackground(shape: RoundedRectangle(cornerRadius: 999, style: .continuous), popup: popup))
         .dsShadow(DS.windowShadow)
         .accessibilityElement(children: .combine)
     }

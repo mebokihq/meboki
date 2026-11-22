@@ -26,7 +26,7 @@ Quick start: `swift build && swift test`, then `Scripts/make-app.sh --install` t
 
 - **Popups** (Settings › General): glass card, anchored bubble, or island (a dark capsule under the menu bar that takes ⏎ ⇧⏎ ⇥ ← → Esc and passes other keys on). Card and bubble show messages and the done line as glass toasts.
 - **Menu bar:** left-click opens the popover (status, Check focused field, Pause in {App}, English, Check level, model row); right-click opens the debug menu.
-- **Settings** (⌘,): General, Appearance (`ColorTone`, `DS.tone`), Writing, Models (local download with SHA-256 check; BYOK cloud), Apps (On / Casual / Manual / Off), Shortcuts, Privacy, Licence, About.
+- **Settings** (⌘,): General, Appearance (`ColorTone`, `DS.tone`; popup opacity `DS.popupOpacity`, underline wave `DS.underlineCurve`), Writing, Models (local download with SHA-256 check; BYOK cloud), Apps (On / Casual / Manual / Off), Shortcuts, Privacy, Licence, About.
 - **Writing settings:** the English variant (US/UK) picks the prompt once per session. Check for, Casual mode and Protect names/code/links are post-filters on the reply (`EditFilter`), never prompt text.
 - **Onboarding:** first launch opens the Welcome window (Accessibility with a live-detected grant, model download only on button press, sample check). Reopen from the right-click menu or Settings › About.
 - Windows the app opens on its own (notices, updates) never activate it, so the keyboard stays in the app being typed in.
@@ -95,7 +95,7 @@ App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   Settings/Shortcut.swift       recorded global shortcut (key code, Carbon modifiers, glyphs), macOS-shortcut conflict check
   Settings/SettingsWindow.swift Settings window (800 × 580 default, resizable to min 800 × 500, size remembered in `settingsWindowSize`; traffic lights in the glass sidebar, search, toast), SettingsModel, recorder key monitor
   Settings/SettingsComponents.swift  group, row, key field, footnote, app icon
-  Settings/Panes/*.swift        General (style picker art), Appearance (tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts (hotkey field), Privacy, Licence (status card, buy, key field, remove), About
+  Settings/Panes/*.swift        General (style picker art), Appearance (popup opacity and underline wave sliders, tone cards, category chips, bubble preview), Writing, Models, Apps, Shortcuts (hotkey field), Privacy, Licence (status card, buy, key field, remove), About
   Settings/LicenceLock.swift    free-mode lock marks: `LicenceGate` (environment), `.licenceLocked(_:caption:)`, `NeedsLicencePopover`, `FreeModeBanner`; `DSSegmented(locked:onLockedTap:)`
   Settings/SettingsDemo.swift   DEBUG `--settings-demo <pane>` for screenshots (see the demo flags under Commands)
   Updates/UpdateController.swift  Sparkle wrapper: on only with a feed in Info.plist, gentle reminder state (`available`, `needsAttention`), the two switches, install at a quiet moment; DEBUG `MEBOKI_DEMO_UPDATE=<version>` (+ `MEBOKI_DEMO_UPDATE_DAYS=<n>`) fakes a found version for the demo flags and `--demo-popups --all`

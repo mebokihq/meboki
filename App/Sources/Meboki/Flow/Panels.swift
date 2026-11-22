@@ -75,7 +75,21 @@ final class HostedPanel<Content: View> {
 
 struct Inset<Content: View>: View {
     let content: Content
-    var body: some View { content.padding(PanelGeometry.inset) }
+    @ObservedObject private var look = PopupLook.shared
+    var body: some View {
+        content.padding(PanelGeometry.inset)
+            // The panels live for the whole run and SwiftUI skips redrawing a glass background whose inputs
+            // didn't change, so a static read of `DS.popupOpacity` would keep the value the panel first drew with.
+            .environment(\.dsPopupOpacity, look.opacity)
+    }
+}
+
+/// The popup opacity the popup panels draw with (`Inset`). Set by `AppSettings.popupOpacity`, so a change
+/// reaches panels already created, even while one is on screen.
+@MainActor
+final class PopupLook: ObservableObject {
+    static let shared = PopupLook()
+    @Published var opacity = DS.popupOpacity
 }
 
 /// Drives the `popIn` appearance of a panel's content; layout doesn't change with it.

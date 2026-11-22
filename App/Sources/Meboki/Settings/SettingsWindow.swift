@@ -73,7 +73,7 @@ enum SettingsPane: String, CaseIterable, Identifiable {
             ["Correction popup", "Glass card", "Anchored bubble", "Island HUD", "Return key", "Launch at login",
              "Show in menu bar", "Underline mistakes as I type", "Updates",
              "Check for updates automatically", "Install updates automatically"]
-        case .appearance: ["Color tone", "Colors", "Vivid", "Eased", "Muted", "Dusty", "Bright", "Theme", "Preview"]
+        case .appearance: ["Color tone", "Colors", "Vivid", "Eased", "Muted", "Dusty", "Bright", "Theme", "Preview", "Opacity", "Transparency", "Transparent", "Solid", "Glass", "Underline", "Wave", "Wavy", "Curvy", "Flat"]
         case .writing:
             ["English variant", "US", "UK", "Check for", "Spelling", "Grammar", "Casual mode in chat apps",
              "Protect names, code and links", "Explain each fix", "Skip text that isn't English", "Language"]

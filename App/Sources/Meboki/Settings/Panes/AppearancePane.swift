@@ -10,24 +10,90 @@ struct AppearancePane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsGroupHeader("Color tone", first: true)
+            SettingsGroupHeader("Popups and underlines", first: true)
             SettingsGroup {
-                HStack(alignment: .top, spacing: 10) {
+                RangeRow(title: "Opacity", defaultNote: "Standard glass", low: "Transparent", high: "Solid",
+                         accessibility: "Popup opacity", value: $settings.popupOpacity,
+                         standard: DS.popupOpacityDefault)
+                SettingsDivider()
+                RangeRow(title: "Wave", defaultNote: "Standard wave", low: "Flat", high: "Curvy",
+                         accessibility: "Underline wave", value: $settings.underlineCurve,
+                         standard: DS.underlineCurveDefault) {
+                    WaveLine(curve: settings.underlineCurve)
+                        .stroke(FixCategory.spelling.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                        .frame(width: 44, height: 4)
+                        .accessibilityHidden(true)
+                }
+            }
+            SettingsFootnote(symbol: "square.on.square.dashed", text: "Opacity: card, bubble, island and their messages. Wave: the mistake underlines.")
+
+            SettingsGroupHeader("Color tone")
+            SettingsGroup {
+                HStack(alignment: .top, spacing: 8) {
                     ForEach(ColorTone.allCases) { tone in
                         ToneCard(tone: tone, category: category, selected: tone == settings.colorTone) {
                             settings.colorTone = tone
                         }
                     }
                 }
-                .padding(14)
+                .padding(10)
                 SettingsDivider()
                 CategoryChips(selection: $category)
-                    .padding(EdgeInsets(top: 12, leading: 14, bottom: 12, trailing: 14))
-                TonePreview(tone: settings.colorTone, category: category, reasons: settings.explainFixes)
-                    .padding(EdgeInsets(top: 0, leading: 14, bottom: 14, trailing: 14))
+                    .padding(EdgeInsets(top: 8, leading: 10, bottom: 8, trailing: 10))
+                TonePreview(tone: settings.colorTone, category: category, reasons: settings.explainFixes,
+                            curve: settings.underlineCurve)
+                    .environment(\.dsPopupOpacity, settings.popupOpacity)
+                    .padding(EdgeInsets(top: 0, leading: 10, bottom: 10, trailing: 10))
             }
             SettingsFootnote(symbol: "paintpalette", text: "Changes the accent and the category colors in popups, underlines, the menu-bar popover and Settings.")
         }
+    }
+}
+
+/// A 0 … 100 % setting: title (with `defaultNote` while at `standard`), an optional sample, low label, slider,
+/// high label, the percentage, and Reset (dimmed at `standard`). The labels have fixed widths so the sliders of
+/// stacked rows line up.
+private struct RangeRow<Sample: View>: View {
+    let title, defaultNote, low, high, accessibility: String
+    @Binding var value: Double
+    let standard: Double
+    @ViewBuilder var sample: Sample
+
+    private var isDefault: Bool { abs(value - standard) < 0.001 }
+
+    var body: some View {
+        SettingsRow(title, subtitle: isDefault ? defaultNote : nil) {
+            HStack(spacing: 10) {
+                sample
+                Text(low).font(DS.Font.caption).foregroundStyle(DS.textSecondary)
+                    .frame(width: 70, alignment: .trailing)
+                // No `step:`: it draws a tick mark per step. Snap to whole percents instead.
+                Slider(value: Binding(get: { value }, set: { value = ($0 * 100).rounded() / 100 }), in: 0...1)
+                    .tint(DS.brand)
+                    .frame(minWidth: 110, maxWidth: 170)
+                    .accessibilityLabel(accessibility)
+                    .accessibilityValue("\(Int((value * 100).rounded())) percent")
+                Text(high).font(DS.Font.caption).foregroundStyle(DS.textSecondary)
+                    .frame(width: 36, alignment: .leading)
+                Text("\(Int((value * 100).rounded()))%")
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(DS.text)
+                    .frame(width: 36, alignment: .trailing)
+                Button("Reset") { value = standard }
+                    .buttonStyle(.ds(.secondary, small: true))
+                    .fixedSize()
+                    .disabled(isDefault)
+                    .opacity(isDefault ? 0.4 : 1)
+            }
+        }
+    }
+}
+
+extension RangeRow where Sample == EmptyView {
+    init(title: String, defaultNote: String, low: String, high: String, accessibility: String,
+         value: Binding<Double>, standard: Double) {
+        self.init(title: title, defaultNote: defaultNote, low: low, high: high, accessibility: accessibility,
+                  value: value, standard: standard) { EmptyView() }
     }
 }
 
@@ -64,8 +130,8 @@ private struct ToneCard: View {
     var body: some View {
         let p = DS.palette(tone)
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(spacing: 6) {
                     HStack(spacing: 3) {
                         ForEach(swatches.indices, id: \.self) { i in
                             RoundedRectangle(cornerRadius: 3, style: .continuous).fill(swatches[i]).frame(height: 14)
@@ -167,11 +233,12 @@ private struct TonePreview: View {
     let tone: ColorTone
     let category: FixCategory
     let reasons: Bool
+    let curve: Double
 
     var body: some View {
         let fix = SampleFix.of(category)
         let color = category.color
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(tone.title)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(DS.text)
@@ -184,7 +251,7 @@ private struct TonePreview: View {
                                                 reason: reasons ? "\(category.title): \(fix.reason)" : nil,
                                                 dots: [], position: 1, pending: 3, footer: ""))
                     .padding(.leading, 80)
-                    .padding(.top, 12)
+                    .padding(.top, 10)
             }
             HStack(spacing: 6) {
                 ForEach(FixCategory.allCases, id: \.self) { c in
@@ -199,9 +266,9 @@ private struct TonePreview: View {
                         .shadow(color: c.color.opacity(0.45), radius: 5, y: 4)
                 }
             }
-            .padding(.top, 6)
+            .padding(.top, 2)
         }
-        .padding(20)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Wallpaper())
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.suggestion, style: .continuous))
@@ -223,7 +290,7 @@ private struct TonePreview: View {
                 .padding(.horizontal, 2)
                 .background(RoundedRectangle(cornerRadius: 4, style: .continuous).fill(color.opacity(0.16)))
                 .overlay(alignment: .bottom) {
-                    WaveLine().stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    WaveLine(curve: curve).stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                         .frame(height: 4).offset(y: 3)
                 }
             Text(" the files today.")
@@ -231,7 +298,7 @@ private struct TonePreview: View {
         .font(.system(size: 14))
         .foregroundStyle(DS.text)
         .lineLimit(1)
-        .padding(EdgeInsets(top: 12, leading: 14, bottom: 14, trailing: 14))
+        .padding(EdgeInsets(top: 10, leading: 12, bottom: 12, trailing: 12))
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(DS.field.opacity(0.92)))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(DS.separator, lineWidth: 0.5))
         .shadow(color: .black.opacity(0.12), radius: 12, y: 8)

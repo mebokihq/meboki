@@ -23,6 +23,16 @@ enum SettingsDemo {
             let name = CommandLine.arguments[i + 1]
             settings.colorTone = ColorTone(rawValue: name == "vivid" ? "current" : name) ?? .muted
         }
+        // `--popup-opacity 0…1`: Settings › Appearance › Popup opacity.
+        if let i = CommandLine.arguments.firstIndex(of: "--popup-opacity"), i + 1 < CommandLine.arguments.count,
+           let o = Double(CommandLine.arguments[i + 1]) {
+            settings.popupOpacity = min(1, max(0, o))
+        }
+        // `--underline-curve 0…1`: Settings › Appearance › Wave.
+        if let i = CommandLine.arguments.firstIndex(of: "--underline-curve"), i + 1 < CommandLine.arguments.count,
+           let c = Double(CommandLine.arguments[i + 1]) {
+            settings.underlineCurve = min(1, max(0, c))
+        }
         // `--size 800x500`: open at that window size (still clamped to the minimum and the screen).
         if let i = CommandLine.arguments.firstIndex(of: "--size"), i + 1 < CommandLine.arguments.count {
             let parts = CommandLine.arguments[i + 1].split(separator: "x").compactMap { Double($0) }
