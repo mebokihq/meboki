@@ -42,6 +42,8 @@ struct CardActions {
     var applyOne: () -> Void = {}
     var ignore: () -> Void = {}
     var update: () -> Void = {}
+    /// A click on a pending progress dot: make fix `index` (into the session's fixes) current.
+    var select: (Int) -> Void = { _ in }
 }
 
 /// Root of the card window: the card for `state`, popping in when `appear.shown` turns true.
@@ -103,7 +105,7 @@ struct GlassCard: View {
             Spacer(minLength: 0)
             // The pill takes room from the dots.
             if state.dots.count <= (state.update == nil ? Self.maxDots : Self.maxDotsWithUpdate) {
-                ProgressDots(dots: state.dots)
+                ProgressDots(dots: state.dots, onSelect: actions.select)
             }
             Text("\(state.position) of \(state.pending)")
                 .font(.system(size: 12))
@@ -216,7 +218,8 @@ final class CardPanel {
         CardActions(applyAll: { [weak self] in self?.keys.onApplyAll?() },
                     applyOne: { [weak self] in self?.keys.onApplyOne?() },
                     ignore: { [weak self] in self?.keys.onIgnore?() },
-                    update: { [weak self] in self?.keys.onUpdate?() })
+                    update: { [weak self] in self?.keys.onUpdate?() },
+                    select: { [weak self] i in self?.keys.onSelect?(i) })
     }
 
     var isVisible: Bool { panel.isVisible }

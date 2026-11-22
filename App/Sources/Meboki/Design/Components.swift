@@ -331,9 +331,12 @@ struct Pill: View {
 // MARK: - Progress dots
 
 /// 7 pt circles, gap 4. Pending `control2`, applied `ok`, skipped `textTertiary`, current 18 × 7 gradient pill.
+/// With `onSelect`, a click on a pending dot makes that fix current, as → pressed until it is reached
+/// (applied and skipped dots don't react).
 struct ProgressDots: View {
     enum Dot { case pending, applied, skipped, current }
     let dots: [Dot]
+    var onSelect: ((Int) -> Void)?
     /// Applied and skipped dots differ by color only; with Differentiate Without Color the skipped ones are
     /// rings (§11). The "n of N" next to the dots says the count in words.
     @Environment(\.accessibilityDifferentiateWithoutColor) private var withoutColor
@@ -341,21 +344,38 @@ struct ProgressDots: View {
     var body: some View {
         HStack(spacing: 4) {
             ForEach(dots.indices, id: \.self) { i in
-                switch dots[i] {
-                case .current: Capsule().fill(DS.brandGradientHorizontal).frame(width: 18, height: 7)
-                case .applied: Circle().fill(DS.ok).frame(width: 7, height: 7)
-                case .skipped:
-                    if withoutColor || DS.A11y.forceDifferentiateWithoutColor {
-                        Circle().strokeBorder(DS.textTertiary, lineWidth: 1.5).frame(width: 7, height: 7)
-                    } else {
-                        Circle().fill(DS.textTertiary).frame(width: 7, height: 7)
-                    }
-                case .pending: Circle().fill(DS.control2).frame(width: 7, height: 7)
+                if let onSelect, dots[i] == .pending {
+                    // The 7 pt dot is a small target: the click area takes the gap on both sides and the
+                    // header's height.
+                    dot(i)
+                        .padding(.horizontal, 2).padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .onTapGesture { NSCursor.arrow.set(); onSelect(i) }
+                        // set, not push/pop: the dot turns into the current pill under the pointer, so its
+                        // hover may never end.
+                        .onHover { inside in (inside ? NSCursor.pointingHand : NSCursor.arrow).set() }
+                        .padding(.horizontal, -2).padding(.vertical, -6)
+                } else {
+                    dot(i)
                 }
             }
         }
         .animation(DS.Motion.reduceMotion ? nil : .snappy(duration: 0.25), value: dots)
         .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func dot(_ i: Int) -> some View {
+        switch dots[i] {
+        case .current: Capsule().fill(DS.brandGradientHorizontal).frame(width: 18, height: 7)
+        case .applied: Circle().fill(DS.ok).frame(width: 7, height: 7)
+        case .skipped:
+            if withoutColor || DS.A11y.forceDifferentiateWithoutColor {
+                Circle().strokeBorder(DS.textTertiary, lineWidth: 1.5).frame(width: 7, height: 7)
+            } else {
+                Circle().fill(DS.textTertiary).frame(width: 7, height: 7)
+            }
+        case .pending: Circle().fill(DS.control2).frame(width: 7, height: 7)
+        }
     }
 }
 

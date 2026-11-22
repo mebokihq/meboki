@@ -333,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popup.onIgnore = { [weak self] in self?.ignoreCurrent() }
         popup.onPrevious = { [weak self] in self?.moveCurrent(forward: false) }
         popup.onNext = { [weak self] in self?.moveCurrent(forward: true) }
+        popup.onSelect = { [weak self] i in self?.jumpTo(i) }
         popup.onClose = { [weak self] in self?.closeCard() }
         // The green update badge (§8.10 "Popup badge"): the review ends and the update window opens, as from
         // the menu.
@@ -2512,6 +2513,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard var s = session else { return }
         let moved = forward ? s.list.selectNext() : s.list.selectPrevious()
         guard moved else { return }
+        session = s
+        showCard()
+    }
+
+    /// A click on a pending progress dot: that fix becomes current, as if → were pressed until it was
+    /// reached. The fixes in between keep their state.
+    private func jumpTo(_ index: Int) {
+        guard var s = session, s.list.current != index, s.list.select(index) else { return }
         session = s
         showCard()
     }

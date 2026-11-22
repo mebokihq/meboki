@@ -15,6 +15,8 @@ final class PopupController {
     var onClose: (() -> Void)? { didSet { forEachKeys { $0.onClose = onClose } } }
     /// A click on the update badge.
     var onUpdate: (() -> Void)? { didSet { forEachKeys { $0.onUpdate = onUpdate } } }
+    /// A click on a pending progress dot (card only; the bubble has no dots).
+    var onSelect: ((Int) -> Void)? { didSet { forEachKeys { $0.onSelect = onSelect } } }
 
     private let settings: AppSettings
     private let card = CardPanel()

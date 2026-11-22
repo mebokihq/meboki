@@ -142,6 +142,8 @@ final class PopupKeys {
     var onClose: (() -> Void)?
     /// A click on the green update badge (§8.10 "Popup badge"); no key reaches it.
     var onUpdate: (() -> Void)?
+    /// A click on a pending progress dot: jump to that fix (an index into the session's fixes).
+    var onSelect: ((Int) -> Void)?
     /// Receives the key-down and key-up events this handler doesn't use, instead of the popup window.
     var forward: ((NSEvent) -> Void)?
 
