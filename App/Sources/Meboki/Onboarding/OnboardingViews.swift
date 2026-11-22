@@ -538,7 +538,9 @@ private struct ModelPage: View {
                 }
             }
         }
-        .frame(minHeight: 34)
+        // Full width: a height-only frame offers the HStack exactly its own width back, and the HStack then
+        // truncates the button ("Download 4.…") although the page has room.
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
     }
 
     private func readyText(_ m: ModelInfo) -> String {
