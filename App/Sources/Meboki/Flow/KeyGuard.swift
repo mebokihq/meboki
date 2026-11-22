@@ -10,8 +10,13 @@ import CoreGraphics
 /// apply to stop after its current write (`stopRequested`).
 ///
 /// Only those keys are dropped. Any other key reaches the app; typing changes the field, and the next write's
-/// checks then stop the apply. Meboki's own ⌘V and Delete pass. Without the tap (no permission) the guard
-/// does nothing.
+/// checks then stop the apply. Meboki's own ⌘V and Delete pass. ⇥, the arrows and Esc pass when ⌘, ⌃ or ⌥ is
+/// held, so ⌘⇥ (the app switcher) and other system shortcuts always work (Esc with a modifier still stops the
+/// apply); ⏎ is dropped with any modifier (⌘⏎
+/// sends in chat apps). Without the tap (no permission) the guard does nothing.
+///
+/// The tap is enabled only while the guard is on (and for the ⏎ tail after it): outside an apply Meboki holds no
+/// active tap, so a stall in this process can never hold up the keyboard.
 final class KeyGuard: @unchecked Sendable {
     static let shared = KeyGuard()
 
@@ -33,6 +38,8 @@ final class KeyGuard: @unchecked Sendable {
     private static let returnKeys: Set<Int64> = [36, 76]
     private static let otherKeys: Set<Int64> = [48, 123, 124, 125, 126]
     private static let esc: Int64 = 53
+    /// With one of these held, ⇥, the arrows and Esc are a shortcut (⌘⇥, ⌃→, ⌥⌘Esc), not a review key.
+    private static let shortcutFlags: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate]
 
     /// Esc was pressed since `begin`: the apply stops after its current write.
     var stopRequested: Bool { lock.withLock { stop } }
@@ -54,22 +61,46 @@ final class KeyGuard: @unchecked Sendable {
     /// Returns how many key presses were dropped.
     @discardableResult
     func end(tail: Bool = false) -> Int {
-        lock.withLock {
+        let count = lock.withLock { () -> Int in
             active = false
             if tail { returnUntil = Date().addingTimeInterval(Self.returnTail) }
             return swallowed
         }
+        if tail {
+            // A bit past the tail, so the check below finds it over.
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.returnTail + 0.05) { [weak self] in
+                self?.disableTapIfIdle()
+            }
+        } else {
+            disableTapIfIdle()
+        }
+        return count
+    }
+
+    /// Whether the tap must stay enabled: the guard is on, or ⏎ is still in its tail.
+    private var needed: Bool { lock.withLock { active || Date() < returnUntil } }
+
+    /// Turns the tap off when the guard has nothing left to hold (a `begin` since then keeps it on).
+    private func disableTapIfIdle() {
+        lock.withLock {
+            if !active, Date() >= returnUntil, let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+        }
     }
 
     /// The tap's decision for one event. Called on the tap thread.
-    private func shouldDrop(_ type: CGEventType, code: Int64) -> Bool {
+    private func shouldDrop(_ type: CGEventType, code: Int64, flags: CGEventFlags) -> Bool {
         lock.withLock {
             if type == .keyUp {
                 return held.remove(code) != nil
             }
+            let shortcut = !flags.intersection(Self.shortcutFlags).isEmpty
             let drop: Bool
             if Self.returnKeys.contains(code) {
                 drop = active || Date() < returnUntil
+            } else if shortcut {
+                // A shortcut reaches the app; Esc with a modifier still stops Apply all.
+                drop = false
+                if code == Self.esc, active { stop = true }
             } else if code == Self.esc {
                 drop = active
                 if active { stop = true }
@@ -86,8 +117,8 @@ final class KeyGuard: @unchecked Sendable {
 
     // MARK: Event tap
 
-    /// One tap for the app's lifetime, on its own run-loop thread; it's cheap while the guard is off (a lock and a
-    /// set lookup per key) and is created on the first apply, not at launch.
+    /// One tap for the app's lifetime, on its own run-loop thread, created on the first apply, not at launch.
+    /// It is enabled by `begin` and disabled again once the guard ends (`disableTapIfIdle`).
     private func startTap() {
         let (existing, first) = lock.withLock { () -> (CFMachPort?, Bool) in
             defer { tried = true }
@@ -106,11 +137,12 @@ final class KeyGuard: @unchecked Sendable {
                 let me = Unmanaged<KeyGuard>.fromOpaque(info).takeUnretainedValue()
                 if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                     me.lock.withLock { me.held.removeAll() }
-                    if let tap = me.tap { CGEvent.tapEnable(tap: tap, enable: true) }
+                    // Back on only while an apply needs it; otherwise it stays off as `end` would leave it.
+                    if me.needed, let tap = me.lock.withLock({ me.tap }) { CGEvent.tapEnable(tap: tap, enable: true) }
                     return Unmanaged.passUnretained(event)
                 }
                 let code = event.getIntegerValueField(.keyboardEventKeycode)
-                return me.shouldDrop(type, code: code) ? nil : Unmanaged.passUnretained(event)
+                return me.shouldDrop(type, code: code, flags: event.flags) ? nil : Unmanaged.passUnretained(event)
             }
             guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap,
                                                options: .defaultTap, eventsOfInterest: CGEventMask(mask),
@@ -120,10 +152,14 @@ final class KeyGuard: @unchecked Sendable {
                 ready.signal()
                 return
             }
-            self.lock.withLock { self.tap = port }
             let source = CFMachPortCreateRunLoopSource(nil, port, 0)
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
-            CGEvent.tapEnable(tap: port, enable: true)
+            // `begin` waits only so long: if the apply already ended, `end` found no tap to turn off, so the tap
+            // goes on only while the guard still needs it. Under the lock, like `disableTapIfIdle`.
+            self.lock.withLock {
+                self.tap = port
+                CGEvent.tapEnable(tap: port, enable: self.active || Date() < self.returnUntil)
+            }
             ready.signal()
             CFRunLoopRun()
         }
