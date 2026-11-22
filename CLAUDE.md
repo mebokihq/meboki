@@ -18,7 +18,9 @@ Quick start: `swift build && swift test`, then `Scripts/make-app.sh --install` t
 
 ### Reading and writing fields
 
-- Read text, selection and bounds only through `AX.text` / `AX.selection` / `AX.select` / `AX.bounds(el, range, text:)`, never `kAXValueAttribute` directly.
+- **The check flow reads and writes through a `TextSurface`** (`TextSurface.swift`), never a raw element: one field (`SingleFieldSurface`, the `AX` helpers below on one element) or a document made of several fields (`CompositeSurface`). `SurfaceResolver` picks the surface with strategies that recognise the Accessibility tree's shape, never an app name, and falls back to the single field, so apps without a strategy keep the plain path. LibreOffice Writer gives one `AXTextArea` per paragraph on screen: `SiblingParagraphsStrategy` joins them (`SegmentMap` in Core), a write goes to one paragraph, and only while the document still holds exactly the text the fix positions refer to (`replace(expected:)`).
+- **Behaviour that differs between field kinds is a surface trait**, asked by the flow: `textFollowsScroll` (the text changes on scroll: follow it before measuring and between Apply all writes; a single field learns it at run time when its text changes right after a scroll with no key pressed, `ScrollChangeDetector`, as Obsidian's CodeMirror does, and such a change is re-checked at once from the sentence cache), `carry` (move fixes by paragraph identity, `FixList.followParagraphs`, instead of a whole-text diff), `settlesLate` (positions lag after a scroll: show underlines once two measurements agree), `placesCaretAfterReview`. Add a strategy or a trait for a new app; don't add bundle-ID checks to `AppDelegate`, `FieldWatcher` or `FocusTracker`.
+- Inside a surface, read text, selection and bounds only through `AX.text` / `AX.selection` / `AX.select` / `AX.bounds(el, range, text:)`, never `kAXValueAttribute` directly.
 - Chromium `contenteditable` (x.com, Gmail, Notion, Slack, Obsidian) is measured through its static-text leaves (`TextLeafMap`). Mail compose (WebKit `AXWebArea`) uses text markers and is written by select + paste.
 - Apps that give no text bounds get the card below the field instead of underlines.
 
@@ -72,9 +74,11 @@ Code comments cite design and plan sections (`PLAN.md §…`, `design_code.md §
 App/Sources/Meboki/             menu-bar app (AppKit + SwiftUI), target "Meboki"
   AppDelegate.swift             debug menu, popover state, hotkey, check flow, pause gate, review session on a FixList (underlines or fallback card, apply / apply all / ignore), toasts, status pulse
   Accessibility.swift           AX read/write, app quirks, secure-input checks, paste fallback, ClipboardGuard, Log
+  TextSurface.swift             what the check flow reads and writes: `TextSurface` (one field, or a document made of several fields), `SingleFieldSurface` (the `AX` helpers on one element), `SurfaceStrategy` / `SurfaceResolver` (picks a surface by the tree's shape, falls back to the single field)
+  CompositeSurface.swift        a document of paragraph fields as one text (`SegmentMap`), written one paragraph at a time; `SiblingParagraphsStrategy` (LibreOffice Writer: sibling `AXTextArea`s stacked top to bottom)
   RichText.swift                text-marker adapter: AX.text / selection / select / bounds for any field (Chromium contenteditable via text leaves, WebKit editable web areas like Mail via text markers)
   VCLGeometry.swift             LibreOffice (VCL) quirk: element frames and text bounds flipped with the wrong screen height on several displays
-  FieldProbe.swift              DEBUG `--probe-field <bundle id> [word …]`: what the adapter sees in an app's focused field
+  FieldProbe.swift              DEBUG `--probe-field <bundle id> [word …]`: what the adapter sees in an app's focused field, and which text surface takes it (`--surface-replace word replacement` writes through the surface; test documents only)
   Flow/Panels.swift             KeyPanel, HostedPanel (transparent non-activating panel, sync sizing), placement below the field
   Flow/Panels.swift             (also) PopupKeys: the shared popup keys ⏎ ⇧⏎ ⇥ ← → Esc
   Flow/GlassCardView.swift      glass card view + CardPanel (under a word, or below the field in the fallback)
@@ -124,9 +128,12 @@ Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   Diff.swift                    word-level diff → UTF-16 `Edit`s
   ProofreadEngine.swift         ProofreadEngine: paragraph chunks → model → filters → edits
   CheckPipeline.swift           sentence cache (only changed sentence runs go to the model), cursor-first order, scope; CheckScheduler (typing pause, stale-pass cancel)
-  FixList.swift                 fixes in any order (UTF-16 range shifting), n of N, card swap text and underline range (FixDisplay); live review: textEdited, reconcile; Apply all groups (one write per paragraph run)
+  FixList.swift                 fixes in any order (UTF-16 range shifting), n of N, card swap text and underline range (FixDisplay); live review: textEdited, reconcile, followParagraphs / relocate (documents of paragraph fields); Apply all groups (one write per paragraph run)
   IgnoredFixes.swift            fixes the user ignored, by sentence, so later checks leave them out
   TextChange.swift              one contiguous change between two field values (common prefix/suffix, surrogate-safe)
+  ScrollChange.swift            `ScrollChangeDetector`: a text change right after a scroll with no key pressed (a field that holds only the lines near the screen), and how long to wait until the field rests before showing underlines (`settleDelay`)
+  ParagraphFieldShape.swift     which sibling text fields are the paragraphs of one document (unlabelled, childless text areas stacked top to bottom), used by `SiblingParagraphsStrategy`
+  SegmentMap.swift              a document made of several text fields (paragraph per element): joined text, document ↔ segment-local ranges
   TextLeafMap.swift             lines up a rich editor's static-text leaves with its AXValue (UTF-16), splits ranges into leaf-local pieces
   FixCategory.swift             diff classifier (spelling / grammar / clarity / punctuation) + reason templates
   CheckOptions.swift            EnglishVariant, CheckLevel, CheckOptions (the settings a check uses)
@@ -157,7 +164,7 @@ Scripts/make-bench-kit.sh       bench kit for a macOS 26 Mac without Xcode or Py
 docs/bench/                     long-field benchmark page
 ```
 
-Flow: hotkey → `AX.snapshot` (focused element, `AX.text`, `AX.selection`) → `ProofreadEngine.check` (one request per paragraph) → `PostFilter.judge` → `Diff.edits` → `EditFilter` (settings) → `FixList` in `Session` → `AX.lineRects` (`AX.bounds`: native, markers or leaves) → underline overlay → click → glass card → `AX.replace` per fix.
+Flow: hotkey → `AX.snapshot` (focused element → `SurfaceResolver` → `TextSurface`: text, selection) → `ProofreadEngine.check` (one request per paragraph) → `PostFilter.judge` → `Diff.edits` → `EditFilter` (settings) → `FixList` in `Session` → `TextSurface.lineRects` (`AX.bounds`: native, markers or leaves, per paragraph field) → underline overlay → click → glass card → `TextSurface.replace` (`AX.replace` on one field) per fix.
 
 Runtime paths: models in `~/Library/Application Support/Meboki/Models/`, logs in `~/Library/Logs/Meboki/` (`meboki.log`, `llama-server.log`; written only with Settings › Privacy › Logs on).
 

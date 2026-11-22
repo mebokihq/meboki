@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+ xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+ xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+ xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+ office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:automatic-styles>
+  <style:style style:name="P1" style:family="paragraph"><style:paragraph-properties fo:margin-bottom="0.2cm"/></style:style>
+ </office:automatic-styles>
+ <office:body><office:text>
+<text:h text:outline-level="2">Apply all while LibreOffice scrolls itself</text:h>
+<text:p text:style-name="P1">How to test: scroll until the long paragraph that starts with "Long paragraph" begins in the lower third of the window, so its last sentences are below the window. Click into a short paragraph near the top, wait for the underlines, open the card and press Return (Apply all). The first write is the end of the long paragraph, which makes LibreOffice scroll down. Expected in the log: "apply all: document moved, N fix(es) kept" and "followed the document 1 time(s)", and every change in the paragraph it was underlined in.</text:p>
+<text:p text:style-name="P1">Short paragraph 1 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 2 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Short paragraph 3 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 4 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Short paragraph 5 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 6 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Short paragraph 7 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 8 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Short paragraph 9 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 10 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Short paragraph 11 have a cat, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Short paragraph 12 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">Long paragraph starts here and it is correct for a while. Long paragraph starts here and it is correct for a while. Long paragraph starts here and it is correct for a while. Long paragraph starts here and it is correct for a while. Long paragraph starts here and it is correct for a while. Long paragraph starts here and it is correct for a while. Near its end the writing go wrong. Their is a mistake in this sentence. The last sentence of the long paragraph have an error too, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Below paragraph 1 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 2 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 3 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 4 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 5 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 6 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 7 have a mistake that only shows after scrolling.</text:p>
+<text:p text:style-name="P1">Below paragraph 8 have a mistake that only shows after scrolling.</text:p>
+ </office:text></office:body>
+</office:document>

@@ -4,7 +4,10 @@ import Carbon
 
 /// Snapshot of the focused text field.
 struct FieldSnapshot {
-    let element: AXUIElement
+    /// The text the check reads and writes: the focused field, or the document it is part of (`SurfaceResolver`).
+    let surface: TextSurface
+    /// The focused element (the surface's anchor).
+    var element: AXUIElement { surface.anchor }
     let pid: pid_t
     let text: String
     let selection: NSRange?
@@ -303,14 +306,19 @@ enum AX {
         if IsSecureEventInputEnabled() { throw AXError2.secureInput }
         guard var el = focusedElement(pid: pid) else { throw AXError2.noFocusedField }
         if isSecureField(el) { throw AXError2.secureField }
-        var text = self.text(el)
+        // The focused field may be one paragraph of a bigger document: the surface decides what the text is.
+        var surface = SurfaceResolver.surface(for: el, pid: pid)
+        if surface.isSecure { throw AXError2.secureField }
+        var text = surface.text()
         if text == nil, missingTextError(el) == .appHidesText {
             // Chromium and Electron build their tree only after `prepare`: the first read can see a bare window.
             Thread.sleep(forTimeInterval: 0.3)
             if let again = focusedElement(pid: pid) {
                 el = again
                 if isSecureField(el) { throw AXError2.secureField }
-                text = self.text(el)
+                surface = SurfaceResolver.surface(for: el, pid: pid)
+                if surface.isSecure { throw AXError2.secureField }
+                text = surface.text()
             }
         }
         guard let text else {
@@ -318,7 +326,8 @@ enum AX {
             Log.write("snapshot: no text, focused role \(string(el, kAXRoleAttribute) ?? "none") → \(error)")
             throw error
         }
-        return FieldSnapshot(element: el, pid: pid, text: text, selection: selection(el), frame: frame(el))
+        return FieldSnapshot(surface: surface, pid: pid, text: text, selection: surface.selection(),
+                             frame: surface.frame())
     }
 
     private static let textRoles: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox"]

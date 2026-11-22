@@ -24,14 +24,14 @@ final class FieldWatcher {
     var onMouseMoved: ((CGPoint) -> Void)?
     var onTick: (() -> Void)?
 
-    private let element: AXUIElement
+    private let surface: TextSurface
     private var observer: AXObserver?
     private var registered: [(AXUIElement, String)] = []
     private var monitors: [Any] = []
     private var timer: Timer?
 
-    init(pid: pid_t, element: AXUIElement, observeField: Bool) {
-        self.element = element
+    init(pid: pid_t, surface: TextSurface, observeField: Bool) {
+        self.surface = surface
         installMonitors()
         guard observeField else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
@@ -95,9 +95,10 @@ final class FieldWatcher {
         observer = obs
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(obs), .defaultMode)
 
-        register(element, kAXValueChangedNotification)
-        register(element, kAXUIElementDestroyedNotification)
+        for el in surface.valueElements { register(el, kAXValueChangedNotification) }
+        for el in surface.lifeElements { register(el, kAXUIElementDestroyedNotification) }
         register(AXUIElementCreateApplication(pid), kAXFocusedUIElementChangedNotification)
+        let element = surface.anchor
         if let window = AX.window(of: element) {
             register(window, kAXMovedNotification)
             register(window, kAXResizedNotification)
@@ -117,11 +118,11 @@ final class FieldWatcher {
         }
     }
 
-    /// A value change from the field is an edit; from a scroll bar, a scroll.
+    /// A value change from the field (any element of its surface) is an edit; from a scroll bar, a scroll.
     private func handle(_ name: String, from el: AXUIElement) {
         switch name {
         case kAXValueChangedNotification:
-            if CFEqual(el, element) { onValueChanged?() } else { onLayoutChanged?() }
+            if surface.valueElements.contains(where: { CFEqual($0, el) }) { onValueChanged?() } else { onLayoutChanged?() }
         case kAXUIElementDestroyedNotification:
             onFieldGone?()
         case kAXFocusedUIElementChangedNotification:

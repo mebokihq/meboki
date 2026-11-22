@@ -278,6 +278,73 @@ public struct FixList: Equatable, Sendable {
         }
     }
 
+    /// The text was rearranged without edits inside what stays: `place` gives each fix's new range in `newText`
+    /// (same length), or nil when its text left (it leaves the list). Fixes keep their order and state. Returns
+    /// where each kept fix went (old index → new index).
+    @discardableResult
+    public mutating func relocate(to newText: String, _ place: (NSRange) -> NSRange?) -> [Int: Int] {
+        let oldCurrent = current
+        var kept: [Fix] = []
+        var newIndex: [Int: Int] = [:]
+        for (i, var f) in fixes.enumerated() {
+            let r = f.currentRange
+            guard let to = place(r), to.length == r.length else {
+                if f.status == .applied { retiredApplied += 1 }
+                if f.status == .skipped { retiredSkipped += 1 }
+                continue
+            }
+            f.edit.range.location = to.location
+            newIndex[i] = kept.count
+            kept.append(f)
+        }
+        text = newText
+        fixes = kept
+        if let oldCurrent { current = newIndex[oldCurrent] ?? nearestPending(to: 0) }
+        return newIndex
+    }
+
+    /// Carries the list over when the text is a document of paragraphs that are known by identity (one field per
+    /// paragraph, `SegmentMap`): `oldIDs` / `newIDs` name each paragraph of `old` (whose text must be `text`) and
+    /// `new`; an equal id is the same paragraph. Paragraphs can come and go at any point (an app that lists only
+    /// the paragraphs on screen changes them while scrolling).
+    ///
+    /// A text diff over the whole document can't do this: repeated text lines up with the wrong paragraph, and a
+    /// fix would follow it there. Here a fix stays with its paragraph: an edit inside a paragraph that stayed is
+    /// one `textEdited` change in that paragraph; a fix in a paragraph that left goes. Nil, changing nothing,
+    /// when `old` isn't `text` or the paragraphs that stayed changed their order.
+    @discardableResult
+    public mutating func followParagraphs(from old: SegmentMap, ids oldIDs: [Int], to new: SegmentMap,
+                                          ids newIDs: [Int]) -> [Int: Int]? {
+        guard old.text == text, oldIDs.count == old.segments.count, newIDs.count == new.segments.count else { return nil }
+        var newPosition: [Int: Int] = [:]
+        for (n, id) in newIDs.enumerated() where newPosition[id] == nil { newPosition[id] = n }
+        let pairs = oldIDs.enumerated().compactMap { o, id in newPosition[id].map { (o: o, n: $0) } }
+        guard zip(pairs, pairs.dropFirst()).allSatisfy({ $0.n < $1.n }),
+              Set(pairs.map(\.n)).count == pairs.count else { return nil }
+
+        var remap = Dictionary(uniqueKeysWithValues: fixes.indices.map { ($0, $0) })
+        func then(_ step: [Int: Int]) {
+            remap = remap.compactMapValues { step[$0] }
+        }
+        // Edits inside paragraphs that stayed, the last first, so the ranges of earlier ones hold.
+        var working = old
+        for (o, n) in pairs.reversed() {
+            guard let local = TextChange.between(working.segments[o], new.segments[n]),
+                  let at = working.documentRange(segment: o, local.range) else { continue }
+            guard let step = textEdited(TextChange(range: at, replacement: local.replacement)) else { return nil }
+            then(step)
+            working = working.replacing(segment: o, with: new.segments[n])
+        }
+        // Paragraphs that came or went: each fix moves with its paragraph, or leaves with it.
+        var target: [Int: Int] = [:]
+        for p in pairs { target[p.o] = p.n }
+        then(relocate(to: new.text) { r in
+            guard let (o, local) = working.local(r), let n = target[o] else { return nil }
+            return new.documentRange(segment: n, local)
+        })
+        return remap
+    }
+
     /// The first pending fix at or after `location`, else the last pending fix, else nil.
     private func nearestPending(to location: Int) -> Int? {
         let p = pendingIndices

@@ -73,6 +73,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var watcher: FieldWatcher?
     /// Debounced underline refresh after a scroll, move or write.
     private var relayout: DispatchWorkItem?
+    /// After a scroll in a field that settles late (`TextSurface.settlesLate`): the last measured marks and how
+    /// many measurements were taken, until two in a row agree (`refreshUnderlines(confirm:)`).
+    private var settling: (marks: [UnderlineMark], tries: Int)?
+    /// Scrolls and key presses during a review, to tell a text change that came from scrolling (an editor that keeps
+    /// only the lines near the screen in its field, such as Obsidian) from one the user typed.
+    private var scrollChanges = ScrollChangeDetector()
+    /// When the review last saw the field's text move with a scroll (`syncLive`): underlines wait until it rests.
+    private var lastTextMove: Date?
+    /// After a scroll moved the text: one more check once it rests, over what is on screen then (the checks during
+    /// the scroll saw a visible range that was still changing).
+    private var restCheckDue = false
     /// Debounced check that the field still holds the reviewed text.
     private var valueCheck: DispatchWorkItem?
     /// Debounced check of what a scroll brought on screen (automatic review).
@@ -90,7 +101,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let focusTracker = FocusTracker()
     /// The focused text area the automatic check watches, until focus moves.
     private struct AutoTarget {
+        /// The focused element.
         let element: AXUIElement
+        /// What the check reads: the element, or the document it is part of (`SurfaceResolver`).
+        let surface: TextSurface
         let pid: pid_t
         /// The app gives real text bounds there (measured on the first text with letters). Without them the
         /// automatic check stays off in this field: it shows underlines only, never a card below the field.
@@ -124,7 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// When the text of the pending automatic check was handed over (for the card's check time).
     private var autoRequested = Date()
     /// Esc dismissed the underlines in this field: no automatic check there until focus moves.
-    private var autoMuted: AXUIElement?
+    private var autoMuted: TextSurface?
     /// Fixes the user ignored (⇥). Automatic and live checks leave them out, so they don't come back.
     private var ignoredFixes = IgnoredFixes()
     /// The user switched Spaces while the running check was waiting for the model.
@@ -159,6 +173,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         /// The whole field value as Meboki expects it: the snapshot, plus every fix written so far, as
         /// the app reported it after the last write. Anything else means the user edited the field.
         var fieldText: String
+        /// The whole text the fix ranges refer to (outside a live review): the snapshot with every fix Meboki
+        /// wrote, computed, never read back. A surface whose text changes without edits writes only while it
+        /// still holds exactly this (`TextSurface.replace(expected:)`).
+        var basis: String
         /// When the last fix was written. Apps that update their value late (Chromium) get a moment to settle.
         var lastWrite: Date?
         /// The rect of the last underlined one-line fix, compared on each tick to notice silent layout changes.
@@ -1654,7 +1672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
                 self.session = Session(snapshot: snap, scopeLocation: scope.location, island: useIsland,
-                                       fieldText: snap.text, list: list, modelName: modelName,
+                                       fieldText: snap.text, basis: snap.text, list: list, modelName: modelName,
                                        cloudProvider: cloudProvider,
                                        checkDuration: Date().timeIntervalSince(started),
                                        checkID: id, liveEligible: liveEligible, pipeline: pipe)
@@ -1709,14 +1727,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Underlines only. Fixes scrolled out of view still count: a scroll brings their underlines.
             guard let layout else {
                 session = nil
-                if let t = autoTarget, CFEqual(t.element, s.snapshot.element) { noBoundsYet() }
+                if let t = autoTarget, t.surface.owns(s.snapshot.element) { noBoundsYet() }
                 return
             }
             s.mode = .underlines
             s.probe = layout.probe
             session = s
             // Underlines are up: earlier misses were the app settling (`noBoundsYet`), not a field without bounds.
-            if let t = autoTarget, CFEqual(t.element, s.snapshot.element) { autoTarget?.boundsMisses = 0 }
+            if let t = autoTarget, t.surface.owns(s.snapshot.element) { autoTarget?.boundsMisses = 0 }
             overlay.show(layout.marks, clip: layout.clip)
             watch(s, observeField: true)
             Log.write("review: auto, \(layout.marks.count) of \(s.list.fixes.count) fix(es) underlined in \(app)")
@@ -1770,12 +1788,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Asks Accessibility where each pending fix is. Nil when the field's visible frame is unknown or no
     /// pending fix has bounds.
     private func underlineLayout(_ s: Session) -> UnderlineLayout? {
-        let el = s.snapshot.element
-        guard let clip = (AX.visibleFrame(el) ?? s.snapshot.frame).map(Self.onOneDisplay) else { return nil }
+        let surface = s.snapshot.surface
+        guard let clip = (surface.visibleFrame() ?? s.snapshot.frame).map(Self.onOneDisplay) else { return nil }
         var layout = UnderlineLayout(marks: [], clip: clip, anyBounds: false)
         for i in s.list.pendingIndices {
             guard let r = fieldRange(markOf: i, in: s),
-                  let rects = AX.lineRects(el, range: r, in: s.fieldText) else { continue }
+                  let rects = surface.lineRects(r, in: s.fieldText) else { continue }
             layout.anyBounds = true
             let visible = rects.filter { clip.contains(CGPoint(x: $0.midX, y: $0.midY)) }
             guard !visible.isEmpty else { continue }
@@ -1800,10 +1818,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Recomputes the underlines (after a write, a scroll or a move). When AX can't place any pending fix any
     /// more, the session ends. An open card follows its word, or closes when the word left the screen.
-    private func refreshUnderlines() {
+    /// `confirm`: after a scroll in a field that settles late, the underlines show only once two measurements
+    /// 0.1 s apart agree (at most 4 measurements; then the last one shows). Chromium and Electron editors report
+    /// their pre-scroll positions for a moment, which drew the underlines on the wrong lines first (Obsidian).
+    private func refreshUnderlines(confirm: Bool = false) {
         relayout?.cancel()
         relayout = nil
+        let previous = confirm ? settling : nil
+        settling = nil
         guard var s = session, s.mode == .underlines else { return }
+        let moving = s.snapshot.surface.settlesLate || s.snapshot.surface.textFollowsScroll
+        // A field that is still moving (scrolled or swapped lines in within the quiet time): wait, underlines hidden.
+        if confirm, moving {
+            let wait = scrollChanges.settleDelay(at: Date(), textMovedAt: lastTextMove)
+            if wait > 0 {
+                settling = previous
+                let work = DispatchWorkItem { [weak self] in self?.refreshUnderlines(confirm: true) }
+                relayout = work
+                DispatchQueue.main.asyncAfter(deadline: .now() + wait, execute: work)
+                return
+            }
+        }
         guard s.list.pendingCount > 0 else {
             // A live review with nothing pending stays up and waits for the next check.
             if s.live {
@@ -1814,15 +1849,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         guard let layout = underlineLayout(s) else {
             // An automatic review waits (a scroll or the next edit brings the underlines back) rather than
-            // ending and starting a new check with no user action.
-            if s.auto {
+            // ending and starting a new check with no user action. So does a live review of a surface whose text
+            // follows the scroll: its text may have changed under it, and the review follows it first.
+            if s.auto || (s.live && s.snapshot.surface.textFollowsScroll) {
                 closeCard()
                 overlay.hide()
+                if s.live, s.snapshot.surface.textFollowsScroll { scheduleValueCheck(after: 0.1) }
                 return
             }
             Log.write("review: the app stopped giving text bounds; underlines cleared")
             cancel()
             return
+        }
+        // A field whose text follows the scroll may still be swapping lines in: take its text first (that redraws
+        // by itself), so underlines are never placed in text that's already gone.
+        if confirm, s.live, s.snapshot.surface.textFollowsScroll, let now = s.snapshot.surface.text(),
+           now != s.list.text, syncLive() {
+            return
+        }
+        if confirm, previous?.marks != layout.marks, (previous?.tries ?? 0) < 3 {
+            // Not settled yet: measure again; the underlines stay hidden (suspended) meanwhile.
+            settling = (layout.marks, (previous?.tries ?? 0) + 1)
+            let work = DispatchWorkItem { [weak self] in self?.refreshUnderlines(confirm: true) }
+            relayout = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + (moving ? 0.15 : 0.1), execute: work)
+            return
+        }
+        if confirm, moving, restCheckDue, s.live {
+            // Shown at rest: check what is on screen now (mostly from the cache; a result that changes nothing
+            // doesn't redraw, see `liveResult`).
+            restCheckDue = false
+            requestLiveCheck(s)
         }
         s.probe = layout.probe
         session = s
@@ -1838,11 +1895,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Redraws the underlines once a scroll, move or write has settled. `suspend` hides them until then
     /// (they'd sit on the wrong words while the text moves).
-    private func scheduleRelayout(after delay: TimeInterval = 0.15, suspend: Bool = true) {
+    private func scheduleRelayout(after delay: TimeInterval = 0.15, suspend: Bool = true, confirm: Bool = false) {
         guard session?.mode == .underlines else { return }
         if suspend { overlay.suspend() }
         relayout?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.refreshUnderlines() }
+        settling = nil
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            // A surface whose text follows the scroll (`TextSurface.textFollowsScroll`): the review takes the new
+            // text first, or every underline would be measured in text that's gone. A change redraws by itself.
+            if let s = self.session, s.live, s.snapshot.surface.textFollowsScroll, self.syncLive() { return }
+            self.refreshUnderlines(confirm: confirm)
+        }
         relayout = work
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
@@ -1850,9 +1914,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Starts watching the field and the user's input for this session.
     private func watch(_ s: Session, observeField: Bool) {
         watcher?.stop()
-        let w = FieldWatcher(pid: s.snapshot.pid, element: s.snapshot.element, observeField: observeField)
+        let w = FieldWatcher(pid: s.snapshot.pid, surface: s.snapshot.surface, observeField: observeField)
         w.onClick = { [weak self] p in self?.handleClick(at: p) }
-        w.onKey = { [weak self] code in self?.handleKey(code) }
+        w.onKey = { [weak self] code in
+            self?.scrollChanges.keyPressed(at: Date())
+            self?.handleKey(code)
+        }
         w.onMouseMoved = { [weak self] p in
             guard let self, self.session?.mode == .underlines else { return }
             self.overlay.hovered = self.overlay.hit(p)?.fix
@@ -1863,11 +1930,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.cancel()
         }
         w.onFocusChanged = { [weak self] in
-            guard let self, let s = self.session, !AX.isFocused(s.snapshot.element, pid: s.snapshot.pid) else { return }
+            guard let self, let s = self.session, !s.snapshot.surface.isFocused(pid: s.snapshot.pid) else { return }
             Log.write("review: focus left the field; underlines cleared")
             self.cancel()
         }
-        w.onLayoutChanged = { [weak self] in self?.layoutChanged() }
+        w.onLayoutChanged = { [weak self] in
+            self?.scrollChanges.scrolled(at: Date())
+            self?.layoutChanged()
+        }
         w.onTick = { [weak self] in self?.checkLayoutDrift() }
         watcher = w
     }
@@ -1876,7 +1946,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// check, so paragraphs scrolled into view get checked (the scheduler waits for a pause, and paragraphs
     /// already checked come from the cache).
     private func layoutChanged() {
-        scheduleRelayout()
+        // A field that settles late (Chromium and Electron editors: Obsidian, Notion, Chrome): its underlines come
+        // back only once their positions stop moving.
+        // So does a field whose text follows the scroll (Obsidian, LibreOffice): its lines are swapped in a moment
+        // after the scroll.
+        let surface = session?.snapshot.surface
+        scheduleRelayout(confirm: surface?.settlesLate == true || surface?.textFollowsScroll == true)
         guard let s = session, s.auto, s.live else { return }
         // Once the scroll settles: per scroll event it would read the field and stop the running pass each time.
         scrollCheck?.cancel()
@@ -1935,7 +2010,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             syncLive()
             return
         }
-        guard let now = AX.text(s.snapshot.element) else { return }
+        guard let now = s.snapshot.surface.text() else { return }
         guard now != s.fieldText else { return }
         // An app that settles its value late after our write (Chromium): take the settled value. A later
         // write still checks the original text is in place before it writes anything.
@@ -1975,20 +2050,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             cancel()
             return true
         }
-        guard let now = AX.text(s.snapshot.element), now != s.list.text else { return false }
+        guard let now = s.snapshot.surface.text(), now != s.list.text else { return false }
         // Our own write may not have settled yet (Chromium reports the old value for a moment): look again then.
         if let t = s.lastWrite, Date().timeIntervalSince(t) < 0.5 {
             scheduleValueCheck(after: 0.52 - Date().timeIntervalSince(t))
             return false
         }
+        // A document of paragraph fields whose paragraphs on screen changed: fixes follow their paragraph.
+        let oldLength = (s.list.text as NSString).length
+        if let remap = s.snapshot.surface.carry(&s.list, to: now) {
+            s.fieldText = now
+            session = s
+            Log.write("review: document moved (\(oldLength) → \((now as NSString).length) UTF-16), "
+                + "\(remap.count) fix(es) kept, \(s.list.pendingCount) pending")
+            lastTextMove = Date()
+            restCheckDue = true
+            popup.hide()
+            overlay.current = nil
+            scheduleRelayout(after: 0.05, confirm: true)
+            showLiveIsland()
+            requestLiveCheck(s)
+            return true
+        }
         guard let change = TextChange.between(s.list.text, now) else { return false }
         let removed = (s.list.text as NSString).substring(with: change.range)
         let before = s.list
+        // Changed right after a scroll with no key pressed: the field keeps only the lines near the screen (Obsidian).
+        // The surface learns it (`textFollowsScroll`: follow the text before every redraw), and the review is checked
+        // again at once: the lines that stayed come from the sentence cache with their fixes in the right place.
+        let byScroll = scrollChanges.isScrollChange(at: Date())
+        if byScroll, !s.snapshot.surface.textFollowsScroll {
+            s.snapshot.surface.learnTextFollowsScroll()
+            Log.write("review: the field's text follows the scroll (it holds only the lines near the screen); "
+                + "following it")
+        }
         guard let remap = s.list.textEdited(change) else { return false }
         s.fieldText = now
         session = s
-        Log.write("review: field edited at \(change.range.location) (\(change.delta >= 0 ? "+" : "")\(change.delta)), "
-            + "\(s.list.pendingCount) pending")
+        Log.write("review: field \(byScroll ? "scrolled" : "edited") at \(change.range.location) "
+            + "(\(change.delta >= 0 ? "+" : "")\(change.delta)), \(s.list.pendingCount) pending")
+        if byScroll {
+            lastTextMove = Date()
+            restCheckDue = true
+            popup.hide()
+            overlay.current = nil
+            scheduleRelayout(after: 0.05, confirm: true)
+            showLiveIsland()
+            requestLiveCheck(s, now: true)
+            return true
+        }
         // The indices moved: no card on a fix that moved, and no clicks on the old marks until the redraw.
         popup.hide()
         overlay.current = nil
@@ -2016,7 +2126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // The edited line on screen: the character before the caret, in the field's new text.
         let end = s.scopeLocation + change.range.location + (change.replacement as NSString).length
         let line: CGRect? = small && end > 0
-            ? AX.bounds(s.snapshot.element, NSRange(location: end - 1, length: 1), text: s.fieldText)
+            ? s.snapshot.surface.bounds(NSRange(location: end - 1, length: 1), text: s.fieldText)
             : nil
         overlay.retarget(remap) { old, rect in
             guard before.fixes.indices.contains(old) else { return false }
@@ -2057,7 +2167,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Hands the current text to the scheduler, which checks it after a typing pause.
     /// `typing`: the user edited the field (not our own write, a scroll or a closed popup), so the word right
     /// before the caret may be half typed and gets no fix yet (`CheckPipeline.Scope.typing`).
-    private func requestLiveCheck(_ s: Session, typing: Bool = false) {
+    /// `now`: check without waiting for a typing pause (after a scroll: the cache answers for the lines that stayed).
+    private func requestLiveCheck(_ s: Session, typing: Bool = false, now: Bool = false) {
         guard let scheduler = s.scheduler, liveCheckAllowed(s) else { return }
         let text = s.list.text
         // An automatic review whose field now holds nothing but code: no model call, but the fixes already
@@ -2082,22 +2193,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // Apple's model went away during the review: the fixes shown stay, nothing more is checked.
             return
         }
-        let el = s.snapshot.element
-        let caret = AX.selection(el)?.location
+        let surface = s.snapshot.surface
+        let caret = surface.selection()?.location
         // A hotkey review covers the whole field; an automatic one, what's on screen around the caret.
         let scope: CheckPipeline.Scope = s.auto
-            ? .init(cursor: caret, visible: AX.visibleCharacterRange(el), typing: typing)
+            ? .init(cursor: caret, visible: surface.visibleCharacterRange(), typing: typing)
             : .init(cursor: caret, maxLength: .max, typing: typing)
         let previous = liveChain
         liveChain = Task {
             await previous?.value
-            await scheduler.textChanged(text, scope: scope)
+            if now {
+                await scheduler.checkNow(text, scope: scope)
+            } else {
+                await scheduler.textChanged(text, scope: scope)
+            }
         }
     }
 
     /// The gates of ⌃⌥G, checked again before every live re-check: the text goes to the model again.
     private func liveCheckAllowed(_ s: Session) -> Bool {
-        guard !usingCloud, settings.effectiveUnderlineAsYouType, !AX.isSecureField(s.snapshot.element) else { return false }
+        guard !usingCloud, settings.effectiveUnderlineAsYouType, !s.snapshot.surface.isSecure else { return false }
         let bundle = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier
         if s.auto { return settings.autoCheckAllowed(bundle) }
         return settings.effectiveAppMode(bundle) != .off
@@ -2115,15 +2230,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         syncLive()  // typing the watcher hasn't reported yet
         guard var s = session, s.live, s.list.text == update.text else { return }
         let open = popup.isVisible ? s.list.currentFix?.edit : nil
+        let unchanged = s.list
         s.list.reconcile(edits: ignoredFixes.filter(result.edits, in: update.text), covered: result.covered)
         session = s
+        // Nothing changed and the underlines are up: no redraw (a hide-and-show here was the flicker after a scroll).
+        if s.list == unchanged, overlay.alphaValueIsShown, relayout == nil {
+            if update.done {
+                Log.write("live check: \(s.list.pendingCount) pending, \(result.requests) request(s), unchanged")
+            }
+            showLiveIsland()
+            return
+        }
         if update.done {
             Log.write("live check: \(s.list.pendingCount) pending, \(result.requests) request(s)"
                 + (result.foreignChunks > 0 ? ", \(result.foreignChunks) paragraph(s) not in English" : ""))
         }
         // The card stays on its fix while the check still has it.
         if let open, s.list.currentFix?.edit != open { closeCard() }
-        refreshUnderlines()
+        // Right after a scroll, a field that settles late or whose text follows the scroll still reports its old
+        // positions: the check (often all from the cache, so instant) must not draw before they settle. The redraw
+        // waits for two measurements that agree, like the one after the scroll itself.
+        let surface = s.snapshot.surface
+        if scrollChanges.isScrollChange(at: Date()), surface.settlesLate || surface.textFollowsScroll {
+            if relayout == nil { scheduleRelayout(after: 0.05, confirm: true) }
+        } else if relayout == nil {
+            // A pending redraw will draw the new list; refreshing now would cancel one that waits for positions to settle.
+            refreshUnderlines()
+        }
         showLiveIsland()
     }
 
@@ -2131,13 +2264,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// last underlined fix is measured again; if it moved, the underlines are redrawn.
     private func checkLayoutDrift() {
         guard let s = session, s.mode == .underlines, relayout == nil else { return }
-        let clip = AX.visibleFrame(s.snapshot.element).map(Self.onOneDisplay)
+        // Its text may have followed a scroll the app didn't announce: take it first (that redraws by itself).
+        if s.live, s.snapshot.surface.textFollowsScroll, syncLive() { return }
+        let clip = s.snapshot.surface.visibleFrame().map(Self.onOneDisplay)
         var moved = clip != nil && overlay.isVisible && !overlay.marks.isEmpty
             && clip.map { !Self.near($0, overlay.clip) } == true
         if !moved, let probe = s.probe, let r = fieldRange(markOf: probe.fix, in: s) {
-            moved = AX.bounds(s.snapshot.element, r, text: s.fieldText).map { !Self.near($0, probe.rect) } ?? true
+            moved = s.snapshot.surface.bounds(r, text: s.fieldText).map { !Self.near($0, probe.rect) } ?? true
         }
-        if moved { refreshUnderlines() }
+        guard moved else { return }
+        // Still settling after a scroll (a field that reports positions late): redraw once they agree.
+        let surface = s.snapshot.surface
+        if scrollChanges.isScrollChange(at: Date()), surface.settlesLate || surface.textFollowsScroll {
+            scheduleRelayout(after: 0.05, confirm: true)
+        } else {
+            refreshUnderlines()
+        }
     }
 
     /// With "Displays have separate Spaces" (the macOS default) a window shows on one display only, so a field
@@ -2232,7 +2374,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.refreshUnderlines()
             guard let s = self.session, s.list.fixes.indices.contains(i), s.list.fixes[i].status == .applied,
                   s.list.fixes[i].edit == applied, let r = self.fieldRange(markOf: i, in: s),
-                  let rects = AX.lineRects(s.snapshot.element, range: r, in: s.fieldText) else { return }
+                  let rects = s.snapshot.surface.lineRects(r, in: s.fieldText) else { return }
             self.overlay.flash(rects)
         }
         relayout = work
@@ -2252,24 +2394,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Before anything slow (grouping asks the app about formatting): a second ⏎ must not reach the app.
         KeyGuard.shared.begin()
         hideUnderlinesNow(suspend: false)
-        let el = s.snapshot.element, offset = s.scopeLocation
-        let now = AX.text(el) ?? s.fieldText
-        let groups = s.list.applyAllGroups { span in
-            AX.isOneTextRun(el, NSRange(location: offset + span.location, length: span.length), text: now)
+        let surface = s.snapshot.surface, offset = s.scopeLocation
+        func grouped(_ s: Session) -> [FixList.ApplyGroup] {
+            let now = surface.text() ?? s.fieldText
+            return s.list.applyAllGroups { span in
+                surface.isOneTextRun(NSRange(location: offset + span.location, length: span.length), text: now)
+            }
         }
+        var groups = grouped(s)
         let total = groups.reduce(0) { $0 + $1.indices.count }
+        let planned = groups.count
+        // A surface whose text follows the scroll (LibreOffice scrolls to the text each write selects): before each
+        // write the review takes the document as it is now, fixes matched by paragraph, and what's still pending is
+        // grouped again. Fixes whose paragraph left the screen leave the list (the next check brings them back).
+        let follows = s.live && surface.textFollowsScroll
         let started = Date()
-        var written = 0, stopped = false
+        var written = 0, followed = 0, stopped = false
         func report(_ outcome: String) {
             let held = KeyGuard.shared.end(tail: true)
-            Log.write("apply all: \(written) of \(groups.count) write(s) for \(total) fix(es), "
+            Log.write("apply all: \(written) of \(planned) write(s) for \(total) fix(es), "
                 + String(format: "%.1f s", Date().timeIntervalSince(started)) + ", \(outcome)"
+                + (followed > 0 ? ", followed the document \(followed) time(s)" : "")
                 + (held > 0 ? ", \(held) key press(es) held" : ""))
         }
-        for g in groups {
+        var next = 0
+        while next < groups.count {
             if KeyGuard.shared.stopRequested { stopped = true; break }
-            guard writeGroup(g, in: &s) else { report("stopped by a failed write"); return }
+            if follows, followed < 50 {
+                switch followDocument(&s) {
+                case .same:
+                    break
+                case .followed:
+                    followed += 1
+                    session = s
+                    groups = grouped(s)
+                    next = 0
+                    continue
+                case .moved:
+                    // The rest come back with the next check of the text as it is now.
+                    session = s
+                    report("stopped: the field's text moved with the scroll")
+                    syncLive()
+                    return
+                }
+            }
+            guard writeGroup(groups[next], in: &s) else { report("stopped by a failed write"); return }
             written += 1
+            next += 1
             session = s
         }
         report(stopped ? "stopped by Esc" : "done")
@@ -2280,6 +2451,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         reviewDone()
+    }
+
+    /// Apply all on a surface whose text follows the scroll: when the document no longer holds the review's text,
+    /// carries the list over to it by paragraph (`TextSurface.carry`) and returns true. False when nothing changed,
+    /// or when the change isn't one the surface can follow by paragraph (then the next write refuses, safely).
+    private enum Follow { case same, followed, moved }
+
+    /// Apply all on a surface whose text follows the scroll, before each write. `followed`: the document moved and the
+    /// list was carried over by paragraph (`TextSurface.carry`). `moved`: the text moved but the surface can't match
+    /// fixes to it (a single field such as Obsidian's editor): Apply all must stop rather than write at old offsets.
+    private func followDocument(_ s: inout Session) -> Follow {
+        guard let now = s.snapshot.surface.text(), now != s.list.text else { return .same }
+        var list = s.list
+        guard let remap = s.snapshot.surface.carry(&list, to: now) else { return .moved }
+        s.list = list
+        s.fieldText = now
+        Log.write("apply all: document moved, \(remap.count) fix(es) kept, \(list.pendingCount) pending")
+        return .followed
     }
 
     /// Takes the underlines off the screen before a write blocks the main thread: `suspend` keeps them for the
@@ -2351,7 +2540,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// the done line; an automatic one ends quietly.
     private func dismissReview() {
         guard let s = session else { return }
-        autoMuted = s.snapshot.element
+        autoMuted = s.snapshot.surface
         Log.write("review: dismissed; no automatic check in this field until focus moves")
         if s.list.appliedCount > 0, !s.auto { finish(placeCaret: false) } else { cancel() }
     }
@@ -2430,6 +2619,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// After a write: the field value Meboki now expects.
     private func afterWrite(_ e: Edit, in s: inout Session, recheck: Bool) {
         s.lastWrite = Date()
+        let written = NSRange(location: s.scopeLocation + e.range.location, length: e.range.length)
+        s.basis = (s.basis as NSString).replacingCharacters(in: written, with: e.replacement)
         if s.live {
             // The list is the truth; anything else in the field is diffed against it once the write settled.
             s.fieldText = s.list.text
@@ -2438,7 +2629,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // What the app now reports, so later edit checks compare against the real value.
         let range = NSRange(location: s.scopeLocation + e.range.location, length: e.range.length)
-        s.fieldText = AX.text(s.snapshot.element)
+        s.fieldText = s.snapshot.surface.text()
             ?? (s.fieldText as NSString).replacingCharacters(in: range, with: e.replacement)
     }
 
@@ -2452,8 +2643,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let range = NSRange(location: s.scopeLocation + e.range.location, length: e.range.length)
         var usedPaste = false
-        let ok = AX.replace(in: s.snapshot.element, pid: s.snapshot.pid, range: range,
-                            original: e.original, replacement: e.replacement, pasteOnly: s.usedPaste) {
+        // A live review's list is the whole text; otherwise the ranges refer to the snapshot plus our writes.
+        let expected = s.live ? s.list.text : s.basis
+        let ok = s.snapshot.surface.replace(pid: s.snapshot.pid, range: range, original: e.original,
+                                            replacement: e.replacement, expected: expected,
+                                            pasteOnly: s.usedPaste) {
             // The keystroke fallback must reach the field, not a Meboki panel. A panel that was up gets a
             // moment to go; later writes of an apply find nothing up and don't wait.
             usedPaste = true
@@ -2504,10 +2698,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         checkID += 1  // late live results of this session drop themselves
         if let scheduler = s.scheduler { Task { await scheduler.cancel() } }
         if s.usedPaste { s.clipboard.restore() }
-        if placeCaret, s.list.appliedCount > 0, let now = AX.text(s.snapshot.element) {
+        if placeCaret, s.snapshot.surface.placesCaretAfterReview, s.list.appliedCount > 0,
+           let now = s.snapshot.surface.text() {
             let end = s.scopeLocation + (s.list.text as NSString).length
             if end <= (now as NSString).length {
-                _ = AX.select(s.snapshot.element, NSRange(location: end, length: 0), in: now)
+                _ = s.snapshot.surface.select(NSRange(location: end, length: 0), in: now)
             }
         }
         // An automatic review that ended while its field still has focus (a failed write, secure input): the
@@ -2534,17 +2729,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Focus moved. A multi-line text area the user can type in becomes the target, and its text is checked
     /// after a pause (a field that already holds text gets underlined without typing).
     private func autoFocusChanged(_ el: AXUIElement?, pid: pid_t) {
+        // Another paragraph of the same document (`CompositeSurface`): still the same text. The target, its
+        // bounds verdict and a review stay; the check only learns the new caret.
+        if let el, let t = autoTarget, t.pid == pid, !CFEqual(el, t.element), t.surface.owns(el) {
+            if session == nil { requestAutoCheck() }
+            return
+        }
         stopAutoCheck()
         boundsRetry?.cancel()
         boundsRetry = nil
         autoTarget = nil
         // Focus moved to another element: the mute ends. Nil focus (an Electron window while our panel is key, a
         // re-attach) keeps it, since focus usually comes back to the same field.
-        if let muted = autoMuted, let el, !CFEqual(el, muted) { autoMuted = nil }
+        if let muted = autoMuted, let el, !muted.owns(el) { autoMuted = nil }
         // Secure fields are never read; only editable text areas qualify (not URL bars, search boxes or
         // terminal output). The gates that can change while the field has focus are checked per request.
         guard let el, !AX.isSecureField(el), AX.isEditableTextArea(el) else { return }
-        autoTarget = AutoTarget(element: el, pid: pid)
+        autoTarget = AutoTarget(element: el, surface: SurfaceResolver.surface(for: el, pid: pid), pid: pid)
         let app = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? "pid \(pid)"
         Log.write("auto: focus on a text area in \(app)" + (autoMuted != nil ? " (dismissed here)" : ""))
         requestAutoCheck()
@@ -2557,7 +2758,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
               session == nil, checkTask == nil,
               NSWorkspace.shared.frontmostApplication?.processIdentifier == t.pid,
               settings.autoCheckAllowed(NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier),
-              autoMuted.map({ !CFEqual($0, t.element) }) ?? true,
+              autoMuted.map({ !$0.owns(t.element) }) ?? true,
               !IsSecureEventInputEnabled() else { return false }
         return true
     }
@@ -2567,7 +2768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// (an editable web area), so nothing happens unless the text changed too.
     private func requestAutoCheck(caretOnly: Bool = false) {
         guard var t = autoTarget, t.bounds != false, autoCheckAllowed(t) else { return }
-        let raw = AX.text(t.element)
+        let raw = t.surface.text()
         let seenBefore = t.seen
         t.seen = raw ?? ""
         autoTarget?.seen = t.seen
@@ -2601,7 +2802,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if t.bounds == nil {
             // A re-measure is already due: it runs this request then (typing meanwhile doesn't count as misses).
             if boundsRetry != nil { return }
-            guard AX.hasTextBounds(t.element, text: text, visible: AX.visibleCharacterRange(t.element)) else {
+            guard t.surface.hasTextBounds(text: text, visible: t.surface.visibleCharacterRange()) else {
                 noBoundsYet()
                 return
             }
@@ -2624,8 +2825,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // What's on screen around the caret; a scroll or the next edit brings the rest.
         // After typing (not on focus), a word the caret sits right after may be half typed: no fix for it yet.
         let typing = seenBefore.map { $0 != text } ?? false
-        let scope = CheckPipeline.Scope(cursor: AX.selection(t.element)?.location,
-                                        visible: AX.visibleCharacterRange(t.element), typing: typing)
+        let scope = CheckPipeline.Scope(cursor: t.surface.selection()?.location,
+                                        visible: t.surface.visibleCharacterRange(), typing: typing)
         autoTarget?.requested = text
         autoRequested = Date()
         let previous = autoChain
@@ -2761,14 +2962,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !edits.isEmpty else { return }
         // Read the field again with the hotkey's checks (secure input, secure field, focus): it must still be
         // this field, holding exactly the checked text.
-        guard let snap = try? AX.snapshot(pid: t.pid), CFEqual(snap.element, t.element), snap.text == update.text else {
+        guard let snap = try? AX.snapshot(pid: t.pid), t.surface.owns(snap.element), snap.text == update.text else {
             return
         }
         if let app = NSRunningApplication(processIdentifier: t.pid), let id = app.bundleIdentifier {
             settings.noteChecked(bundleID: id, name: app.localizedName ?? id)
         }
         session = Session(snapshot: snap, scopeLocation: 0, island: settings.effectivePopupStyle == .island,
-                          fieldText: snap.text, list: FixList(text: snap.text, edits: edits),
+                          fieldText: snap.text, basis: snap.text, list: FixList(text: snap.text, edits: edits),
                           modelName: activeModelName, cloudProvider: nil,
                           checkDuration: max(0, Date().timeIntervalSince(autoRequested) - 0.6),
                           checkID: checkID, liveEligible: true, pipeline: pipe, auto: true)

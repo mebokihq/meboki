@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+ xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0"
+ xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+ xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+ office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.text">
+ <office:automatic-styles>
+  <style:style style:name="P1" style:family="paragraph"><style:paragraph-properties fo:margin-bottom="0.2cm"/></style:style>
+  <text:list-style style:name="L1"><text:list-level-style-bullet text:level="1" text:bullet-char="•"/></text:list-style>
+ </office:automatic-styles>
+ <office:body><office:text>
+<text:h text:outline-level="2">Multi-paragraph test document</text:h>
+<text:p text:style-name="P1">This document test how Meboki checks a LibreOffice document. Every paragraph have at least one mistake.</text:p>
+<text:p text:style-name="P1">She have two cat and they is very happy together.</text:p>
+<text:p text:style-name="P1">Yesterday I goes to the store, and buyed some apple for my mother.</text:p>
+<text:p text:style-name="P1"></text:p>
+<text:p text:style-name="P1">The paragraph above is empty. There going to the park tomorrow if the weather are nice.</text:p>
+<text:p text:style-name="P1">Emoji 😀 here, and the cat sleep on it&apos;s bed after the emoji, so UTF-16 offsets matter.</text:p>
+<text:h text:outline-level="2">A second section</text:h>
+<text:p text:style-name="P1">Me and him was late to the meeting becuase the train were delayed.</text:p>
+<text:list text:style-name="L1">
+<text:list-item><text:p text:style-name="P1">First list item have an error.</text:p></text:list-item>
+<text:list-item><text:p text:style-name="P1">Second list item dont have punctuation</text:p></text:list-item>
+<text:list-item><text:p text:style-name="P1">Third item is fine, but there car is red.</text:p></text:list-item>
+</text:list>
+<text:p text:style-name="P1">Its a long paragraph that wraps over several lines in a normal window. Each of the sentences in it have a small grammar problem, so the underline must sit on the right line after a wrap. We was thinking about the best way to test this, and we decided that a long paragraph are the simplest way. Their is no other reason for it to be this long, except that wrapping is important.</text:p>
+<text:p text:style-name="P1">In paragraph 1, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 2 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 3, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 4 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 5, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 6 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 7, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 8 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 9, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 10 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 11, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 12 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 13, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 14 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 15, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 16 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 17, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 18 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 19, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 20 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 21, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 22 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 23, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 24 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 25, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 26 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 27, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 28 are here to make the document long enough to scroll.</text:p>
+<text:p text:style-name="P1">In paragraph 29, the dog chase it's tail every morning.</text:p>
+<text:p text:style-name="P1">Paragraph 30 say that less people came then we expected.</text:p>
+<text:p text:style-name="P1">This is paragraph 31, and it dont end with a full stop</text:p>
+<text:p text:style-name="P1">Paragraph number 32 are here to make the document long enough to scroll.</text:p>
+<text:h text:outline-level="2">End of document</text:h>
+<text:p text:style-name="P1">The last paragraph have a mistake too, so scrolling to the end can be tested.</text:p>
+ </office:text></office:body>
+</office:document>

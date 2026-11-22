@@ -34,14 +34,19 @@ enum FieldProbe {
         print("hasTextBounds \(has)" + String(format: " (%.0f ms)", Date().timeIntervalSince(t1) * 1000))
         var words: [String] = []
         var select: String?, caret: String?, write: (String, String)?, replace: (String, String)?
+        var surfaceReplace: (String, String)?
         var j = i + 2
         while j < args.count {
             if args[j] == "--replace", args.indices.contains(j + 2) { replace = (args[j + 1], args[j + 2]); j += 3; continue }
+            if args[j] == "--surface-replace", args.indices.contains(j + 2) {
+                surfaceReplace = (args[j + 1], args[j + 2]); j += 3; continue
+            }
             if args[j] == "--select", args.indices.contains(j + 1) { select = args[j + 1]; j += 2; continue }
             if args[j] == "--caret", args.indices.contains(j + 1) { caret = args[j + 1]; j += 2; continue }
             if args[j] == "--write", args.indices.contains(j + 2) { write = (args[j + 1], args[j + 2]); j += 3; continue }
             words.append(args[j]); j += 1
         }
+        probeSurface(el, pid: app.processIdentifier, words: words, replace: surfaceReplace)
         for w in words {
             let r = ns.range(of: w)
             guard r.location != NSNotFound else { print("\(w.debugDescription): not in the text"); continue }
@@ -87,6 +92,42 @@ enum FieldProbe {
             clipboard.restore(after: 0.3)
             RunLoop.main.run(until: Date().addingTimeInterval(0.6))
         }
+    }
+
+    /// The surface the check uses for `el` (`SurfaceResolver`): which strategy took it, and for a document of
+    /// several fields its paragraph count, length, caret and the bounds of `words` in the whole document.
+    /// `--surface-replace word replacement` writes through the surface (`TextSurface.replace`): test documents only.
+    private static func probeSurface(_ el: AXUIElement, pid: pid_t, words: [String], replace: (String, String)?) {
+        let t0 = Date()
+        let surface = SurfaceResolver.surface(for: el, pid: pid)
+        let kind = SurfaceResolver.strategies.first { $0.surface(for: el, pid: pid) != nil }?.name ?? "single field"
+        guard let text = surface.text() else { print("surface \(kind): no text"); return }
+        let ns = text as NSString
+        var line = "surface \(kind): \(ns.length) UTF-16"
+        if let c = surface as? CompositeSurface {
+            line += ", \(c.elements.count) paragraph fields, anchor is #\(c.elements.firstIndex { CFEqual($0, el) }.map(String.init) ?? "?")"
+        }
+        print(line + String(format: ", resolved and read in %.0f ms", Date().timeIntervalSince(t0) * 1000))
+        print("  selection \(surface.selection().map(NSStringFromRange) ?? "nil"), frame \(surface.frame().map { NSStringFromRect($0) } ?? "nil"), "
+            + "visible frame \(surface.visibleFrame().map { NSStringFromRect($0) } ?? "nil"), "
+            + "hasTextBounds \(surface.hasTextBounds(text: text, visible: surface.visibleCharacterRange()))")
+        for w in words {
+            let r = ns.range(of: w)
+            guard r.location != NSNotFound else { print("  \(w.debugDescription): not in the document"); continue }
+            let lines = surface.lineRects(r, in: text)?.map { NSStringFromRect($0) } ?? []
+            print("  \(w.debugDescription) @\(r.location)+\(r.length): lines \(lines)")
+        }
+        guard let (word, replacement) = replace else { return }
+        let r = ns.range(of: word)
+        guard r.location != NSNotFound else { print("  surface replace: not in the document"); return }
+        let clipboard = ClipboardGuard()
+        let ok = surface.replace(pid: pid, range: r, original: word, replacement: replacement, expected: text,
+                                 pasteOnly: false) {}
+        let expected = ns.replacingCharacters(in: r, with: replacement)
+        print("  surface replace \(word.debugDescription) → \(replacement.debugDescription) @\(r.location): \(ok), "
+            + "document as expected \(surface.text() == expected)")
+        clipboard.restore(after: 0.3)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
     }
 }
 #endif
