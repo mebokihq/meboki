@@ -12,11 +12,11 @@ struct AppearancePane: View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsGroupHeader("Popups and underlines", first: true)
             SettingsGroup {
-                RangeRow(title: "Opacity", defaultNote: "Standard glass", low: "Transparent", high: "Solid",
+                RangeRow(title: "Opacity", low: "Transparent", high: "Solid",
                          accessibility: "Popup opacity", value: $settings.popupOpacity,
                          standard: DS.popupOpacityDefault)
                 SettingsDivider()
-                RangeRow(title: "Wave", defaultNote: "Standard wave", low: "Flat", high: "Curvy",
+                RangeRow(title: "Wave", low: "Flat", high: "Curvy",
                          accessibility: "Underline wave", value: $settings.underlineCurve,
                          standard: DS.underlineCurveDefault) {
                     WaveLine(curve: settings.underlineCurve)
@@ -50,11 +50,12 @@ struct AppearancePane: View {
     }
 }
 
-/// A 0 … 100 % setting: title (with `defaultNote` while at `standard`), an optional sample, low label, slider,
-/// high label, the percentage, and Reset (dimmed at `standard`). The labels have fixed widths so the sliders of
-/// stacked rows line up.
+/// A 0 … 100 % setting: title with "Default" or "Custom" under it, an optional sample, low label, slider,
+/// high label, the percentage, and Reset (disabled at `standard`). The subtitle is always there and one short
+/// word, so the row keeps its height while dragging and doesn't wrap at the minimum window width. The labels
+/// have fixed widths so the sliders of stacked rows line up.
 private struct RangeRow<Sample: View>: View {
-    let title, defaultNote, low, high, accessibility: String
+    let title, low, high, accessibility: String
     @Binding var value: Double
     let standard: Double
     @ViewBuilder var sample: Sample
@@ -62,7 +63,7 @@ private struct RangeRow<Sample: View>: View {
     private var isDefault: Bool { abs(value - standard) < 0.001 }
 
     var body: some View {
-        SettingsRow(title, subtitle: isDefault ? defaultNote : nil) {
+        SettingsRow(title, subtitle: isDefault ? "Default" : "Custom") {
             HStack(spacing: 10) {
                 sample
                 Text(low).font(DS.Font.caption).foregroundStyle(DS.textSecondary)
@@ -82,17 +83,17 @@ private struct RangeRow<Sample: View>: View {
                 Button("Reset") { value = standard }
                     .buttonStyle(.ds(.secondary, small: true))
                     .fixedSize()
+                    // The DS button style dims a disabled button itself; no extra opacity here.
                     .disabled(isDefault)
-                    .opacity(isDefault ? 0.4 : 1)
             }
         }
     }
 }
 
 extension RangeRow where Sample == EmptyView {
-    init(title: String, defaultNote: String, low: String, high: String, accessibility: String,
+    init(title: String, low: String, high: String, accessibility: String,
          value: Binding<Double>, standard: Double) {
-        self.init(title: title, defaultNote: defaultNote, low: low, high: high, accessibility: accessibility,
+        self.init(title: title, low: low, high: high, accessibility: accessibility,
                   value: value, standard: standard) { EmptyView() }
     }
 }
