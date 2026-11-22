@@ -51,10 +51,13 @@ struct GlassCardRoot: View {
     let state: CardState?
     var actions = CardActions()
     @ObservedObject var appear: AppearModel
+    /// The card was already up and moves to another fix: its content cross-fades into the new one.
+    var morph = false
 
     var body: some View {
         if let state {
             GlassCard(state: state, actions: actions)
+                .animation(morph ? DS.Motion.morph : nil, value: state)
                 .modifier(PopInModifier(active: !appear.shown))
         }
     }
@@ -234,10 +237,11 @@ final class CardPanel {
     func show(_ state: CardState, field: CGRect?, word: CGRect? = nil, makeKey: Bool = true) {
         let wasVisible = panel.isVisible
         if !wasVisible { appear.shown = false }
-        let size = hosted.setRoot(GlassCardRoot(state: state, actions: actions, appear: appear))
+        let morph = wasVisible && !DS.Motion.reduceMotion
+        let size = hosted.setRoot(GlassCardRoot(state: state, actions: actions, appear: appear, morph: morph))
         let origin = word.map { PanelGeometry.origin(for: size, field: $0, gap: 10, dx: -16) }
             ?? PanelGeometry.origin(for: size, field: field, gap: 10)
-        hosted.place(shapeOrigin: origin, animated: wasVisible && !DS.Motion.reduceMotion)
+        hosted.place(shapeOrigin: origin, animated: morph)
         if !wasVisible {
             panel.alphaValue = 1
             panel.orderFrontRegardless()

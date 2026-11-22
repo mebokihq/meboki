@@ -91,6 +91,10 @@ protocol TextSurface: AnyObject {
     /// `edits` (relative to the checked scope, which starts at `scopeLocation` in `text`) without what the app
     /// won't let anyone select, such as list labels (`ParagraphLabels`). The default changes nothing.
     func writableEdits(_ edits: [Edit], in text: String, scopeLocation: Int) -> [Edit]
+    /// After ⇧⏎ / Apply the card (or bubble) stays up and glides to the next fix (design_code.md §5.4). Off: it
+    /// hides for the write and pops in on the next fix once the underlines are back, for a surface whose text
+    /// jumps after a write (Google Docs moves its text window, so the next word's old place means nothing).
+    var popupGlidesAfterApply: Bool { get }
 }
 
 extension TextSurface {
@@ -101,6 +105,7 @@ extension TextSurface {
     var skipsUntouchedFailuresInApplyAll: Bool { false }
     var lastWriteLeftFieldUntouched: Bool { false }
     func writableEdits(_ edits: [Edit], in text: String, scopeLocation: Int) -> [Edit] { edits }
+    var popupGlidesAfterApply: Bool { true }
 }
 
 /// One element is the whole text: every app before multi-field documents, unchanged. Each call is the

@@ -391,6 +391,11 @@ extension DS {
         static let islandExpand = Animation.timingCurve(0.3, 1.1, 0.4, 1, duration: 0.32)
         static let switchKnob = Animation.timingCurve(0.3, 1.4, 0.5, 1, duration: 0.22)
         static let appliedFlashDuration: TimeInterval = 1.4
+        /// Card or bubble gliding from one word to the next: a soft ease-out (quint) that slows into place.
+        static let glideDuration: TimeInterval = 0.34
+        static let glideControlPoints: (Float, Float, Float, Float) = (0.22, 1, 0.36, 1)
+        /// The popup's content changing as it glides: a quick cross-fade of the words, colors and layout.
+        static let morph = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 0.3)
         static let wave = Animation.easeInOut(duration: 0.45).repeatForever(autoreverses: true)
         static let waveStagger: TimeInterval = 0.15
         static let spinner = Animation.linear(duration: 0.7).repeatForever(autoreverses: false)

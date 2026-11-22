@@ -197,6 +197,9 @@ final class MirrorSurface: TextSurface {
     var isSecure: Bool { AX.isSecureField(element) }
     /// The canvas redraws a moment after a scroll.
     var settlesLate: Bool { true }
+    /// Every write is a paste (the card must hide for it) and Docs moves its text window right after, so the
+    /// card pops in on the next fix once the underlines are back instead of gliding (2026-11-22).
+    var popupGlidesAfterApply: Bool { false }
 
     // MARK: Geometry
 

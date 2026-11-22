@@ -24,10 +24,14 @@ struct BubbleRoot: View {
     var tip = BubbleTip()
     var actions = BubbleActions()
     @ObservedObject var appear: AppearModel
+    /// The bubble was already up and moves to another fix: its content (and tip) cross-fade into the new one.
+    var morph = false
 
     var body: some View {
         if let state {
             AnchoredBubble(state: state, tip: tip, actions: actions)
+                .animation(morph ? DS.Motion.morph : nil, value: state)
+                .animation(morph ? DS.Motion.morph : nil, value: tip)
                 .modifier(PopInModifier(active: !appear.shown))
         }
     }
@@ -264,6 +268,7 @@ final class BubblePanel {
     private let announcer = Announcer()
     private let hosted: HostedPanel<BubbleRoot>
     private var panel: NSPanel { hosted.panel }
+    private var lastTip = BubbleTip()
 
     init() {
         hosted = HostedPanel(BubbleRoot(state: nil, appear: appear), canBecomeKey: true)
@@ -290,13 +295,17 @@ final class BubblePanel {
     func show(_ state: CardState, word: CGRect, makeKey: Bool = true) {
         let wasVisible = panel.isVisible
         if !wasVisible { appear.shown = false }
-        var tip = BubbleTip()
-        let size = hosted.setRoot(BubbleRoot(state: state, tip: tip, actions: actions, appear: appear))
+        let morph = wasVisible && !DS.Motion.reduceMotion
+        // The sizing pass keeps the tip where it is (the size doesn't depend on it), so a moving bubble's tip
+        // glides straight to its new place.
+        var tip = wasVisible ? lastTip : BubbleTip()
+        let size = hosted.setRoot(BubbleRoot(state: state, tip: tip, actions: actions, appear: appear, morph: morph))
         let origin = PanelGeometry.origin(for: size, field: word, gap: 12, dx: word.width / 2 - 56)
         tip.above = origin.y > word.midY
         tip.x = max(14, min(word.midX - origin.x - 7, size.width - 28))
-        hosted.setRoot(BubbleRoot(state: state, tip: tip, actions: actions, appear: appear))
-        hosted.place(shapeOrigin: origin, animated: wasVisible && !DS.Motion.reduceMotion)
+        lastTip = tip
+        hosted.setRoot(BubbleRoot(state: state, tip: tip, actions: actions, appear: appear, morph: morph))
+        hosted.place(shapeOrigin: origin, animated: morph)
         if !wasVisible {
             panel.alphaValue = 1
             panel.orderFrontRegardless()

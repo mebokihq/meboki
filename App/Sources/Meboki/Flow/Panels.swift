@@ -57,7 +57,7 @@ final class HostedPanel<Content: View> {
     }
 
     /// Moves the window so its visible shape (not the transparent inset) has its bottom-left corner at `origin`.
-    /// `animated` slides it there (0.2 s ease-out), for a card moving from one word to another.
+    /// `animated` glides it there (`DS.Motion.glide…`), for a card moving from one word to another.
     func place(shapeOrigin origin: CGPoint, animated: Bool = false) {
         let i = PanelGeometry.inset
         let target = CGPoint(x: origin.x - i.leading, y: origin.y - i.bottom)
@@ -66,8 +66,9 @@ final class HostedPanel<Content: View> {
             return
         }
         NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.2
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            let c = DS.Motion.glideControlPoints
+            ctx.duration = DS.Motion.glideDuration
+            ctx.timingFunction = CAMediaTimingFunction(controlPoints: c.0, c.1, c.2, c.3)
             panel.animator().setFrame(CGRect(origin: target, size: panel.frame.size), display: true)
         }
     }

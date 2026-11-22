@@ -1932,7 +1932,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard s.list.pendingCount > 0 else {
             // A live review with nothing pending stays up and waits for the next check.
             if s.live {
-                closeCard()
+                closeCard("no fix is pending after the write")
                 overlay.hide()
             }
             return
@@ -1942,7 +1942,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // ending and starting a new check with no user action. So does a live review of a surface whose text
             // follows the scroll: its text may have changed under it, and the review follows it first.
             if s.auto || (s.live && s.snapshot.surface.textFollowsScroll) {
-                closeCard()
+                closeCard("the app gave no text positions for the redraw")
                 overlay.hide()
                 if s.live, s.snapshot.surface.textFollowsScroll { scheduleValueCheck(after: 0.1) }
                 return
@@ -1975,11 +1975,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         session = s
         if overlay.stale { logTypingGuess(against: layout.marks) }
         overlay.show(layout.marks, clip: layout.clip)
+        if let r = reopenCard, !popup.isVisible, let c = s.list.current,
+           let word = layout.marks.first(where: { $0.fix == c })?.rects.first {
+            reopenCard = nil
+            if Date().timeIntervalSince(r.since) < 3 { showCard(word: word) }
+            return
+        }
         guard popup.isVisible else { return }
         if let c = s.list.current, let word = layout.marks.first(where: { $0.fix == c })?.rects.first {
             showCard(word: word)
         } else {
-            closeCard()
+            closeCard(s.list.current.map { "its fix (\($0)) has no underline on screen after the redraw, "
+                + "\(layout.marks.count) underlined" } ?? "no fix is current after the redraw")
         }
     }
 
@@ -2198,7 +2205,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             lastSyncCarried = true
             // The card stays on its fix when the fix survived the move (the relayout puts it under the word, or
             // closes it); otherwise it would vanish under the user's click or ⏎.
-            if !popup.isVisible || s.list.currentFix?.edit != openEdit { popup.hide() }
+            if !popup.isVisible || s.list.currentFix?.edit != openEdit {
+                cardGone("the document moved (" + (s.list.currentFix == nil ? "no fix is current any more"
+                    : "the current fix changed") + ")")
+                popup.hide()
+            }
             overlay.current = nil
             scheduleRelayout(after: 0.05, confirm: true)
             showLiveIsland()
@@ -2225,6 +2236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if byScroll {
             lastTextMove = Date()
             restCheckDue = true
+            cardGone("the field's text changed right after a scroll")
             popup.hide()
             overlay.current = nil
             scheduleRelayout(after: 0.05, confirm: true)
@@ -2233,6 +2245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return true
         }
         // The indices moved: no card on a fix that moved, and no clicks on the old marks until the redraw.
+        cardGone("the field changed (\(removed.isEmpty ? "insertion" : "edit")), fixes moved")
         popup.hide()
         overlay.current = nil
         if s.mode == .underlines, overlay.alphaValueIsShown {
@@ -2381,7 +2394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 + (result.foreignChunks > 0 ? ", \(result.foreignChunks) paragraph(s) not in English" : ""))
         }
         // The card stays on its fix while the check still has it.
-        if let open, s.list.currentFix?.edit != open { closeCard() }
+        if let open, s.list.currentFix?.edit != open { closeCard("the live re-check changed its fix") }
         // Right after a scroll, a field that settles late or whose text follows the scroll still reports its old
         // positions: the check (often all from the cache, so instant) must not draw before they settle. The redraw
         // waits for two measurements that agree, like the one after the scroll itself.
@@ -2435,6 +2448,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// A click on an underline: make that fix current and open the popup (card or bubble) at the clicked word.
     private func openCard(on index: Int, word: CGRect) {
+        reopenCard = nil
         guard var s = session, s.list.select(index) else { return }
         session = s
         showCard(word: word)
@@ -2498,13 +2512,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Log.write("\(what): the text changed under the click and no fix is left to write; review refreshed")
     }
 
+    /// Set when ⇧⏎ / Apply moved the card on to the next fix (§5.4). For a few seconds after, a card that goes
+    /// without the user asking is logged with the reason (`cardGone`), so an app where the card doesn't move on
+    /// shows why in the log.
+    private var moveOnWatch: (since: Date, app: String)?
+
+    private func cardGone(_ why: String) {
+        guard let w = moveOnWatch else { return }
+        moveOnWatch = nil
+        guard Date().timeIntervalSince(w.since) < 3 else { return }
+        Log.write("apply: the card didn't stay on the next fix in \(w.app): \(why)")
+    }
+
+    /// ⇧⏎ / Apply on a surface whose card doesn't glide (`popupGlidesAfterApply` off): the card opens again on the
+    /// current fix the first time the underlines are drawn with it underlined (`refreshUnderlines`), within 3 s.
+    private var reopenCard: (id: Int, since: Date, app: String)?
+    private var reopenID = 0
+
+    private func waitToReopenCard(in s: Session) {
+        reopenID += 1
+        let id = reopenID
+        let app = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier ?? "pid \(s.snapshot.pid)"
+        reopenCard = (id, Date(), app)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self, let r = self.reopenCard, r.id == id else { return }
+            self.reopenCard = nil
+            if self.session != nil {
+                Log.write("apply: the card didn't come back in \(r.app): the next fix wasn't underlined within 3 s")
+            }
+        }
+    }
+
     /// An apply (single or all) is on the stack: a second one called from inside it is ignored, never nested.
     private var applying = false
     /// A write is inside `writeEdit` (only for the log line that shows a nested run loop).
     private var writing = false
 
-    /// ⇧⏎ / Apply: write the current fix. With underlines the card closes, the word flashes and the other
-    /// underlines stay; in the fallback the card moves on to the next fix.
+    /// ⇧⏎ / Apply: write the current fix. With underlines the word flashes, the other underlines stay and the card
+    /// glides on to the next fix (its content cross-fades); in the fallback the card moves on at once.
     private func applyCurrent() {
         guard !applying else { Log.write("apply: ignored, another apply is still running"); return }
         applying = true
@@ -2517,7 +2562,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         guard var s = session, let i = s.list.current else { return }
-        if s.mode == .underlines, !s.island {
+        // The card or bubble stays up and glides on to the next fix (§5.4 ⇧⏎). Its word's place before the write is a
+        // good first target (fixes keep their indices); once the underlines are back it settles on the real one.
+        let cardUp = s.mode == .underlines && !s.island && popup.isVisible
+        let moveOn = cardUp && s.snapshot.surface.popupGlidesAfterApply
+        // A surface whose text jumps after a write: the card hides and pops in on the next fix once it's underlined.
+        let popBack = cardUp && !moveOn
+        var anchors: [Int: CGRect] = [:]
+        if moveOn {
+            for m in overlay.marks where anchors[m.fix] == nil { anchors[m.fix] = m.rects.first }
+            let app = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier ?? "pid \(s.snapshot.pid)"
+            moveOnWatch = (Date(), app)
+        } else if s.mode == .underlines, !s.island {
             popup.hide()
             overlay.current = nil
         }
@@ -2533,8 +2589,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if s.list.isDone {
+            moveOnWatch = nil  // nothing to move on to
             reviewDone()
             return
+        }
+        if popBack { waitToReopenCard(in: s) }
+        if moveOn {
+            // Never leave the card on the fix just written: a key press now would apply the next one.
+            if let next = s.list.current, let anchor = anchors[next] {
+                showCard(word: anchor)
+            } else {
+                closeCard("the next fix had no underline before the write (off screen)")
+            }
         }
         // Apps that lay out late (Chromium) report the old positions for a moment: the underlines come back, and
         // the applied word flashes, once the field has settled.
@@ -2543,10 +2609,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.refreshUnderlines()
-            guard let s = self.session, s.list.fixes.indices.contains(i), s.list.fixes[i].status == .applied,
-                  s.list.fixes[i].edit == applied, let r = self.fieldRange(markOf: i, in: s),
-                  let rects = s.snapshot.surface.lineRects(r, in: s.fieldText) else { return }
-            self.overlay.flash(rects)
+            guard let s = self.session else { return }
+            if s.list.fixes.indices.contains(i), s.list.fixes[i].status == .applied,
+               s.list.fixes[i].edit == applied, let r = self.fieldRange(markOf: i, in: s),
+               let rects = s.snapshot.surface.lineRects(r, in: s.fieldText) {
+                self.overlay.flash(rects)
+            }
+            // The card settles under the next fix's word as it is now (a short slide when the text moved). A fix
+            // with no underline on screen gets no card until the user clicks it.
+            if moveOn, self.popup.isVisible, let next = s.list.current, s.list.fixes[next].status == .pending {
+                if self.overlay.marks.contains(where: { $0.fix == next }) {
+                    self.showCard()
+                } else {
+                    self.closeCard("the next fix has no underline on screen after the write")
+                }
+            }
         }
         relayout = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
@@ -2766,7 +2843,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Esc on the card, or a click outside it. With underlines, only the card closes. In the fallback there
     /// are no underlines to come back to, so this ends the review (with the done toast if fixes were applied).
-    private func closeCard() {
+    /// `why` names a close the user didn't ask for (logged while an Apply's move-on is watched, `cardGone`).
+    private func closeCard(_ why: String? = nil) {
+        if let why { cardGone(why) } else { moveOnWatch = nil; reopenCard = nil }
         guard let s = session else { popup.hide(); return }
         if s.mode == .underlines {
             popup.hide()
@@ -2922,6 +3001,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             usedPaste = true
             KeyGuard.shared.touch()
             let shown = popup.isVisible || island.isVisible || overlay.isVisible || toasts.isVisible
+            if moveOnWatch != nil, popup.isVisible {
+                Log.write("apply: the card hides for a paste write (this app takes pastes only); it pops back in")
+            }
             popup.hide()
             island.hide(animated: false)
             overlay.hide()
@@ -2963,6 +3045,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Ends the review, and optionally puts the caret after the checked text.
     private func endSession(placeCaret: Bool) {
+        cardGone("the review ended")
+        reopenCard = nil
         watcher?.stop()
         watcher = nil
         relayout?.cancel()
