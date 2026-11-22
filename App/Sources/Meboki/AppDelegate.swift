@@ -3060,6 +3060,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .noText:
             toast(.info, "This field doesn't share its text with macOS.", detail: "Meboki can't check it here",
                   near: nil)
+        case .brailleSupportOff:
+            toast(.info, "Turn on braille support in Google Docs.",
+                  detail: "Tools → Accessibility: screen reader and braille support. Docs then shares its text",
+                  near: nil, duration: 8)
         case .appHidesText:
             // Sublime Text, Zed, canvas apps: they draw their own text, so there's nothing to read.
             toast(.info, "\(appName ?? "This app") doesn't share its text with macOS.",

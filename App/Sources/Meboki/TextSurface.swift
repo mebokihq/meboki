@@ -25,6 +25,8 @@ protocol TextSurface: AnyObject {
 
     /// The whole text, or nil when it can't be read.
     func text() -> String?
+    /// Why `text()` is nil, when the surface knows better than the focused element's role (nil: ask the element).
+    var unreadableError: AXError2? { get }
     func selection() -> NSRange?
     /// Selects `range` of `text` and proves it (`AX.select`).
     func select(_ range: NSRange, in text: String) -> Bool
@@ -67,6 +69,10 @@ protocol TextSurface: AnyObject {
     /// The app reports text positions a moment after it scrolls (Chromium and Electron rich editors, measured
     /// through their text leaves): underlines wait until two measurements agree.
     var settlesLate: Bool { get }
+}
+
+extension TextSurface {
+    var unreadableError: AXError2? { nil }
 }
 
 /// One element is the whole text: every app before multi-field documents, unchanged. Each call is the
@@ -138,7 +144,7 @@ protocol SurfaceStrategy {
 /// element by itself (`SingleFieldSurface`), which is how every app worked before.
 enum SurfaceResolver {
     /// Tried in order.
-    static let strategies: [SurfaceStrategy] = [SiblingParagraphsStrategy()]
+    static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy()]
 
     static func surface(for focused: AXUIElement, pid: pid_t) -> TextSurface {
         for s in strategies {

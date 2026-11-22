@@ -218,6 +218,42 @@ extension AX {
         return nil
     }
 
+    /// The selection of a Chromium rich editor in `text` (its value) offsets, read through text markers. Chrome's
+    /// `AXSelectedTextRange` counts the leaves' text with nothing between blocks, so it falls behind the value by
+    /// one or more per paragraph break (Google Docs' hidden field, probed 2026-11-22: 3714 for value offset 3738).
+    /// The marker text from the first leaf to the selection's ends has the same count; walking the leaves turns it
+    /// into a leaf and an offset, and the leaf map into a value offset. Nil unless every leaf is lined up.
+    static func leafSelection(_ el: AXUIElement, text: String) -> NSRange? {
+        guard let sel = copy(el, "AXSelectedTextMarkerRange"), CFGetTypeID(sel) == AXTextMarkerRangeGetTypeID(),
+              let leaves = LeafCache.shared.leaves(for: el, value: text, rebuild: false),
+              leaves.map.segments.count == leaves.elements.count,
+              leaves.map.segments.enumerated().allSatisfy({ $0.offset == $0.element.leaf }),
+              let firstWhole = param(leaves.elements[0], "AXTextMarkerRangeForUIElement", leaves.elements[0]),
+              CFGetTypeID(firstWhole) == AXTextMarkerRangeGetTypeID() else { return nil }
+        let origin = AXTextMarkerRangeCopyStartMarker(firstWhole as! AXTextMarkerRange)
+        let range = sel as! AXTextMarkerRange
+        // A count that ends exactly at a leaf's end is also the next leaf's start: a start (or a caret) goes to
+        // the next leaf, so a caret at the start of a paragraph isn't put at the end of the one before.
+        func valueOffset(_ m: AXTextMarker, atStart: Bool) -> Int? {
+            guard let s = param(el, "AXStringForTextMarkerRange", AXTextMarkerRangeCreate(nil, origin, m)) as? String
+            else { return nil }
+            var n = (s as NSString).length
+            let segs = leaves.map.segments
+            for (i, seg) in segs.enumerated() {
+                if n < seg.range.length || (n == seg.range.length && !(atStart && i + 1 < segs.count)) {
+                    return seg.range.location + n
+                }
+                n -= seg.range.length
+            }
+            return nil
+        }
+        let start = AXTextMarkerRangeCopyStartMarker(range), end = AXTextMarkerRangeCopyEndMarker(range)
+        guard let a = valueOffset(start, atStart: true) else { return nil }
+        if CFEqual(start, end) { return NSRange(location: a, length: 0) }
+        guard let b = valueOffset(end, atStart: false), b >= a else { return nil }
+        return NSRange(location: a, length: b - a)
+    }
+
     /// The marker `offset` UTF-16 units into `leaf`: its start marker, stepped forward one character at a time
     /// (a step can be two units, an emoji), or its end marker at its end.
     private static func leafMarker(_ leaf: AXUIElement, offset: Int) -> AXTextMarker? {

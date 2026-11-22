@@ -19,6 +19,8 @@ enum AXError2: Error, LocalizedError {
     /// `appHidesText`: the app draws its own text (Sublime Text, Zed, canvas apps) and its window has no text element
     /// at all, so nothing can be read. `noText`: a text field is focused but gives no text.
     case notTrusted, noFocusedField, secureField, secureInput, noText, appHidesText, textChanged, writeFailed
+    /// A canvas editor that shares its text only with braille support on (Google Docs, `MirrorSurface`).
+    case brailleSupportOff
 
     var errorDescription: String? {
         switch self {
@@ -30,6 +32,7 @@ enum AXError2: Error, LocalizedError {
         case .appHidesText: "This app doesn't share its text with macOS, so Meboki can't check it here."
         case .textChanged: "The text changed since it was checked. Run the check again."
         case .writeFailed: "This app didn't accept the change, so nothing was replaced. Details: menu → Show Meboki Log."
+        case .brailleSupportOff: "Google Docs shares its text only with braille support on: in Docs, choose Tools → Accessibility and turn on screen reader and braille support."
         }
     }
 }
@@ -322,7 +325,7 @@ enum AX {
             }
         }
         guard let text else {
-            let error = missingTextError(el)
+            let error = surface.unreadableError ?? missingTextError(el)
             Log.write("snapshot: no text, focused role \(string(el, kAXRoleAttribute) ?? "none") → \(error)")
             throw error
         }
@@ -409,12 +412,17 @@ enum AX {
     /// needed the paste fallback; the paste path keeps all of its checks. An editable web area (Mail compose)
     /// always pastes: it has no `AXSelectedText` to set, and its range is selected through text markers.
     static func replace(in el: AXUIElement, pid: pid_t, range: NSRange, original: String, replacement: String,
-                        pasteOnly: Bool = false, beforeKeystroke: () -> Void = {}) -> Bool {
+                        pasteOnly: Bool = false, beforeKeystroke: () -> Void = {},
+                        normalize: @escaping (String) -> String = { $0 }) -> Bool {
+        // What the field holds, as the caller compares it (`normalize`: a surface whose app swaps equivalent
+        // characters by itself; the identity for every other field).
+        let read = { text(el).map(normalize) }
         let tag = "edit @\(range.location)+\(range.length) \(Log.pair(original, replacement))"
-        guard let before = text(el) else {
+        guard let raw = text(el) else {
             Log.write("\(tag): can't read value")
             return false
         }
+        let before = normalize(raw)
         let bns = before as NSString
         guard NSMaxRange(range) <= bns.length, bns.substring(with: range) == original else {
             Log.write("\(tag): field no longer has the original text there: \(Log.snippet(before, around: range))")
@@ -430,17 +438,17 @@ enum AX {
         if !pasteOnly, !isEditableWebArea(el), !neverWritesByAccessibility(pid: pid) {
             // The selection is proven (its text is `original`) before anything is written: Chrome's offsets can
             // land elsewhere while reading back as the range asked for.
-            written = select(el, range, in: before) && setSelectedText(el, replacement)
+            written = select(el, range, in: raw) && setSelectedText(el, replacement)
             // The value decides, not the AX result: some apps (Telegram) apply the write and still return an
             // error. `applied` is the same strict check either way; a reported failure just gets a shorter wait.
-            if waitForValue(el, timeout: written ? 1.0 : 0.3, until: applied) {
+            if waitForValue(el, timeout: written ? 1.0 : 0.3, until: { applied($0.map(normalize)) }) {
                 Log.write("\(tag): ok (accessibility" + (written ? ")" : ", though the app reported an error)"))
                 return true
             }
         }
 
         // Only fall back if the field is provably untouched; otherwise we'd risk a double insert.
-        let now = text(el)
+        let now = read()
         guard now == before else {
             Log.write("\(tag): write=\(written), value changed unexpectedly: \(Log.snippet(now ?? "<nil>", around: range))")
             return false
@@ -457,7 +465,7 @@ enum AX {
             Log.write("\(tag): write=\(written), field unchanged and no longer focused (\(focusDescription(pid: pid))); no paste fallback")
             return false
         }
-        guard select(el, range, in: before) else {
+        guard select(el, range, in: raw) else {
             Log.write("\(tag): write=\(written), field unchanged, and can't select the range for the paste fallback")
             return false
         }
@@ -467,8 +475,8 @@ enum AX {
         } else {
             pasteNow(replacement)
         }
-        let ok = waitForValue(el, timeout: 1.5, until: applied)
-        let after = Log.snippet(text(el) ?? "<nil>", around: range)
+        let ok = waitForValue(el, timeout: 1.5, until: { applied($0.map(normalize)) })
+        let after = Log.snippet(read() ?? "<nil>", around: range)
         Log.write("\(tag): " + (ok ? "ok (paste fallback)" : "paste fallback failed: \(after)"))
         return ok
     }
