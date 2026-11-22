@@ -275,16 +275,23 @@ enum AX {
     /// whole field with the replacement, in a `<textarea>` it wrote at another offset (Firefox, 2026-11-20), while
     /// `AXSelectedTextRange` and `AXSelectedText` read back the range asked for, so `select`'s proof can't catch
     /// it. These apps are written by select + paste only.
-    static func neverWritesByAccessibility(pid: pid_t) -> Bool {
+    static func neverWritesByAccessibility(pid: pid_t) -> Bool { isGecko(pid: pid) }
+
+    /// The app is built on Gecko (Firefox and its forks, Thunderbird).
+    static func isGecko(pid: pid_t) -> Bool {
         guard let id = NSRunningApplication(processIdentifier: pid)?.bundleIdentifier else { return false }
         return geckoBundlePrefixes.contains(where: { id.hasPrefix($0) })
     }
 
-    /// Electron apps and Chromium browsers keep their accessibility tree off until asked (PLAN.md §5).
+    /// Electron apps, Chromium browsers and Gecko apps keep their accessibility tree off until asked (PLAN.md §5).
+    /// Gecko doesn't know `AXManualAccessibility` (-25205): a freshly launched Firefox shows only its window
+    /// (focused role `AXWindow`, so every check failed with `appHidesText`) until `AXEnhancedUserInterface` is set;
+    /// the set reports -25208 but builds the tree (probed 2026-11-22, telegra.ph).
     static func prepare(app: NSRunningApplication) {
         let el = AXUIElementCreateApplication(app.processIdentifier)
         AXUIElementSetAttributeValue(el, "AXManualAccessibility" as CFString, kCFBooleanTrue)
-        if let id = app.bundleIdentifier, chromiumBundlePrefixes.contains(where: { id.hasPrefix($0) }) {
+        if let id = app.bundleIdentifier,
+           (chromiumBundlePrefixes + geckoBundlePrefixes).contains(where: { id.hasPrefix($0) }) {
             AXUIElementSetAttributeValue(el, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
         }
     }

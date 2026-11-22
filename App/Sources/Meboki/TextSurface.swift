@@ -190,7 +190,8 @@ protocol SurfaceStrategy {
 /// element by itself (`SingleFieldSurface`), which is how every app worked before.
 enum SurfaceResolver {
     /// Tried in order.
-    static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy(), NestedBlocksStrategy()]
+    static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy(), NestedBlocksStrategy(),
+                                                GeckoBlocksStrategy()]
 
     static func surface(for focused: AXUIElement, pid: pid_t) -> TextSurface {
         for s in strategies {
