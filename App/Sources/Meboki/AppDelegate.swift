@@ -3359,6 +3359,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             toast(.info, "Turn on braille support in Google Docs.",
                   detail: "Tools → Accessibility: screen reader and braille support. Docs then shares its text",
                   near: nil, duration: 8)
+        case .editorHidesText:
+            toast(.info, "Turn on screen reader support in \(appName ?? "this editor").",
+                  detail: "Settings: editor.accessibilitySupport → on. The editor then shares its text",
+                  near: nil, duration: 8)
         case .appHidesText:
             // Sublime Text, Zed, canvas apps: they draw their own text, so there's nothing to read.
             toast(.info, "\(appName ?? "This app") doesn't share its text with macOS.",

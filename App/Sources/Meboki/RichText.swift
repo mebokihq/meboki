@@ -74,6 +74,7 @@ extension AX {
             }
         }
         let expected = ns.substring(with: probe)
+        if EchoSelectionFields.contains(el) { return selectByEcho(el, range, in: ns) }
         let webArea = isEditableWebArea(el)
         let index: (NSRange) -> Bool = { r in setSelectedRange(el, r) }
         let leafMarkers: (NSRange) -> Bool = { r in leafMarkerRange(el, r, text: text).map { setSelectedMarkers(el, $0) } ?? false }
@@ -95,6 +96,44 @@ extension AX {
             }
         }
         return false
+    }
+
+    /// Selects `range` in a field that echoes its own selection back (`EchoSelectionFields`, Monaco code editors):
+    /// the editor maps an index selection onto its model and then rewrites the field's selection from the model, one
+    /// character short after each `•` line start (VS Code 1.106, probed 2026-11-22). Only that echo tells where a
+    /// paste will land: a text-marker selection reads back right at first and is then moved by the editor, so it is
+    /// never used here. The index is nudged by the echo's drift until the echo is `range` and the selected text is
+    /// what `text` holds there; anything else is a failed selection, and nothing may be written.
+    private static func selectByEcho(_ el: AXUIElement, _ range: NSRange, in ns: NSString) -> Bool {
+        let expected = ns.substring(with: range)
+        var target = range
+        for _ in 0..<4 {
+            guard setSelectedRange(el, target), let echo = settledSelection(el) else { return false }
+            if echo == range {
+                return range.length == 0 || string(el, kAXSelectedTextAttribute) == expected
+            }
+            let start = target.location + (range.location - echo.location)
+            let end = NSMaxRange(target) + (NSMaxRange(range) - NSMaxRange(echo))
+            guard start >= 0, end >= start, end <= ns.length else { return false }
+            target = NSRange(location: start, length: end - start)
+        }
+        Log.write("select @\(range.location)+\(range.length): the editor's selection echo didn't settle on the range")
+        return false
+    }
+
+    /// The field's selection once the editor has echoed it back: read until two reads 60 ms apart agree, after at
+    /// least 0.12 s (the echo came within 0.15 s in every probe), at most 0.6 s.
+    private static func settledSelection(_ el: AXUIElement) -> NSRange? {
+        Thread.sleep(forTimeInterval: 0.12)
+        var last = selection(el)
+        let deadline = Date().addingTimeInterval(0.5)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.06)
+            let now = selection(el)
+            if let now, now == last { return now }
+            last = now
+        }
+        return nil
     }
 
     /// The app's selection is `probe`, whose text is `expected`: by `AXSelectedText` when the app reports it,
@@ -474,5 +513,20 @@ private final class LeafCache: @unchecked Sendable {
                 + "\(Int((map.coverage(of: value) * 100).rounded()))% of the text covered") }
         }
         return leaves
+    }
+}
+
+/// Fields that rewrite their selection from their own model a moment after it's set (Monaco code editors, marked by
+/// `MonacoStrategy`): `AX.select` selects them by index and proves the range from the echo (`selectByEcho`). The
+/// last 32, compared with `CFEqual`.
+enum EchoSelectionFields {
+    nonisolated(unsafe) private static var elements: [AXUIElement] = []
+
+    static func contains(_ el: AXUIElement) -> Bool { elements.contains { CFEqual($0, el) } }
+
+    static func add(_ el: AXUIElement) {
+        guard !contains(el) else { return }
+        elements.append(el)
+        if elements.count > 32 { elements.removeFirst(elements.count - 32) }
     }
 }

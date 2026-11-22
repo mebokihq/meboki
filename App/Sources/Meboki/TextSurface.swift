@@ -107,9 +107,13 @@ extension TextSurface {
 /// `AX` function the flow called before surfaces existed.
 final class SingleFieldSurface: TextSurface {
     let element: AXUIElement
+    /// The element whose visible part clips the underlines, when the field's own frame is smaller than the text it
+    /// shows (a code editor's input area is one line at the caret, `MonacoStrategy`). Nil: the field itself.
+    let clip: AXUIElement?
 
-    init(_ element: AXUIElement) {
+    init(_ element: AXUIElement, clip: AXUIElement? = nil) {
         self.element = element
+        self.clip = clip
     }
 
     var anchor: AXUIElement { element }
@@ -131,7 +135,7 @@ final class SingleFieldSurface: TextSurface {
     func lineRects(_ range: NSRange, in text: String) -> [CGRect]? { AX.lineRects(element, range: range, in: text) }
     func hasTextBounds(text: String, visible: NSRange?) -> Bool { AX.hasTextBounds(element, text: text, visible: visible) }
     func visibleCharacterRange() -> NSRange? { AX.visibleCharacterRange(element) }
-    func visibleFrame() -> CGRect? { AX.visibleFrame(element) }
+    func visibleFrame() -> CGRect? { AX.visibleFrame(clip ?? element) }
     func frame() -> CGRect? { AX.frame(element) }
     func isOneTextRun(_ range: NSRange, text: String) -> Bool { AX.isOneTextRun(element, range, text: text) }
 
@@ -191,7 +195,7 @@ protocol SurfaceStrategy {
 enum SurfaceResolver {
     /// Tried in order.
     static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy(), NestedBlocksStrategy(),
-                                                GeckoBlocksStrategy()]
+                                                GeckoBlocksStrategy(), MonacoStrategy()]
 
     static func surface(for focused: AXUIElement, pid: pid_t) -> TextSurface {
         for s in strategies {
@@ -212,5 +216,32 @@ enum ScrollFollowingFields {
         guard !contains(el) else { return }
         elements.append(el)
         if elements.count > 32 { elements.removeFirst(elements.count - 32) }
+    }
+}
+
+/// Monaco code editors (VS Code and its forks, vscode.dev). The editor keeps the whole text (with screen reader
+/// support on, `AXError2.editorHidesText`) in a hidden input area whose frame is one line tall at the caret, while
+/// the drawn lines are hidden from Accessibility. The input's text leaf still gives each range a rect where the
+/// editor draws it (word wrap off), so the field is measured as usual and only the clip is the editor's viewport
+/// (`overflow-guard`), not the one-line frame that left only the caret line underlined. Probed 2026-11-22, VS Code
+/// 1.106: leaf rects matched the drawn lines across the whole visible editor. Selections go by index and are proven
+/// by the editor's echo (`EchoSelectionFields`): text markers select the right text in Chromium, which the editor
+/// then moves, so a paste landed beside the fix.
+struct MonacoStrategy: SurfaceStrategy {
+    var name: String { "code editor" }
+
+    func surface(for focused: AXUIElement, pid: pid_t) -> TextSurface? {
+        guard AX.isMonacoInput(focused) else { return nil }
+        // Its selection is the editor's echo, not what was set (`AX.selectByEcho`).
+        EchoSelectionFields.add(focused)
+        var cur = focused
+        for _ in 0..<4 {
+            guard let parent = AX.element(cur, kAXParentAttribute) else { break }
+            if AX.domClasses(parent).contains("overflow-guard") {
+                return SingleFieldSurface(focused, clip: parent)
+            }
+            cur = parent
+        }
+        return nil
     }
 }

@@ -22,6 +22,9 @@ enum AXError2: Error, LocalizedError {
     case notTrusted, noFocusedField, secureField, secureInput, noText, appHidesText, textChanged, writeFailed
     /// A canvas editor that shares its text only with braille support on (Google Docs, `MirrorSurface`).
     case brailleSupportOff
+    /// A Monaco code editor (VS Code, Cursor, VSCodium, vscode.dev) that shares its text only with screen reader
+    /// support on (`editor.accessibilitySupport`): its input area reads empty (probed 2026-11-22, VS Code 1.106).
+    case editorHidesText
 
     var errorDescription: String? {
         switch self {
@@ -34,6 +37,7 @@ enum AXError2: Error, LocalizedError {
         case .textChanged: "The text changed since it was checked. Run the check again."
         case .writeFailed: "This app didn't accept the change, so nothing was replaced. Details: menu → Show Meboki Log."
         case .brailleSupportOff: "Google Docs shares its text only with braille support on: in Docs, choose Tools → Accessibility and turn on screen reader and braille support."
+        case .editorHidesText: "This editor shares its text only with screen reader support on: set editor.accessibilitySupport to on in its settings."
         }
     }
 }
@@ -332,6 +336,16 @@ enum AX {
                 text = surface.text()
             }
         }
+        if let t = text, t.allSatisfy(\.isWhitespace), isMonacoInput(el) {
+            // With `editor.accessibilitySupport` on "auto" the editor turns screen reader mode on a moment after
+            // `prepare` and only then fills its input area; "off" keeps it empty for good.
+            Thread.sleep(forTimeInterval: 0.5)
+            text = surface.text()
+            if let t = text, t.allSatisfy(\.isWhitespace) {
+                Log.write("snapshot: code editor input is empty → \(AXError2.editorHidesText)")
+                throw AXError2.editorHidesText
+            }
+        }
         guard let text else {
             let error = surface.unreadableError ?? missingTextError(el)
             Log.write("snapshot: no text, focused role \(string(el, kAXRoleAttribute) ?? "none") → \(error)")
@@ -342,6 +356,14 @@ enum AX {
     }
 
     private static let textRoles: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox"]
+
+    /// Monaco's hidden input area (VS Code and its forks, vscode.dev): the element that holds the editor's text,
+    /// `native-edit-context` since VS Code's EditContext input, `inputarea` before it.
+    static func isMonacoInput(_ el: AXUIElement) -> Bool {
+        guard string(el, kAXRoleAttribute) == kAXTextAreaRole as String else { return false }
+        let classes = domClasses(el)
+        return classes.contains("native-edit-context") || classes.contains("inputarea")
+    }
 
     /// Why a focused element gave no text. A text role: the field hides its text (`noText`). The window or the app
     /// itself, with no text element anywhere in the window: the app draws its own text and shares nothing
