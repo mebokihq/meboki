@@ -86,7 +86,8 @@ final class AppearModel: ObservableObject {
 
 enum PanelGeometry {
     /// Room around the visible shape for the window shadow (`DS.windowShadow`: up to 30 pt blur, 26 pt down).
-    static let inset = EdgeInsets(top: 24, leading: 40, bottom: 64, trailing: 40)
+    /// The blur reaches about twice its radius, so a smaller inset clips the shadow to a visible rectangle.
+    static let inset = EdgeInsets(top: 40, leading: 64, bottom: 104, trailing: 64)
 
     /// Origin (Cocoa, bottom-left) for a shape of `size` anchored to `field` (a field frame or a word rect):
     /// its left edge at `field.minX + dx` and `gap` below it. If that crosses the bottom of the visible screen
