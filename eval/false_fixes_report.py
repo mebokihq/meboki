@@ -8,7 +8,8 @@ that caused it and the text the check must produce instead. `meboki-eval-filter 
 app's. A case with "steps" runs several checks in order on one pipeline (typing, cache reuse).
 
 Adding a case: one JSON line, either {"id", "source", "input", "output", "expected", "options"?} or
-{"id", "source", "note", "steps": [{"text", "replies": {sent text: reply}, "expected", "typing"?, "cursor"?}]}.
+{"id", "source", "note", "steps": [{"text", "replies": {sent text: reply}, "expected", "typing"?, "cursor"?,
+"notSent"?: [substrings that must never reach the model]}]}.
 "expected" is the whole text after the kept fixes. Options: variant US|UK, level full|grammar|spelling, casual,
 protect (default true). Exit status 1 when any case fails.
 """
@@ -38,6 +39,8 @@ def main():
         print(f"{'ok  ' if r['ok'] else 'FAIL'} {r['id']} step {r['step']}")
         if not r["ok"] or verbose:
             print(f"  expected: {r['expected']}\n  got:      {r['got']}\n  sent:     {r['sent']}")
+            if r.get("leaked"):
+                print(f"  leaked to the model: {r['leaked']}")
     cases = len({r["id"] for r in results})
     print(f"{cases} cases, {len(results)} checks: {len(results) - len(failed)} ok, {len(failed)} failed")
     sys.exit(1 if failed else 0)

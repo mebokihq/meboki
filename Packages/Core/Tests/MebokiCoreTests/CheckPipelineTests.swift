@@ -477,3 +477,80 @@ final class PartialLog: @unchecked Sendable {
     func add(_ r: [NSRange]) { lock.withLock { items.append(r) } }
     var all: [[NSRange]] { lock.withLock { items } }
 }
+
+/// Code blocks inside prose are protected: never sent, never edited (`CodeDetector.blocks`).
+@Suite struct CodeBlockPipelineTests {
+    static let code = "func check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    return true\n}"
+    static let prose = "I dont know teh answer yet."
+    static let text = prose + "\n\n" + code + "\n\n" + "We was late tomorow."
+
+    @Test func codeParagraphIsNeverSent() async throws {
+        let fake = FakeCorrector(fixes)
+        let r = try await CheckPipeline(client: fake).check(Self.text)
+        #expect(fake.calls == [Self.prose, "We was late tomorow."])
+        #expect(r.protectedChunks == 4 && r.complete)  // one paragraph per code line (`}` alone isn't one)
+        let ns = Self.text as NSString
+        let codeRange = ns.range(of: Self.code)
+        #expect(r.edits.allSatisfy { NSIntersectionRange($0.range, codeRange).length == 0 })
+        #expect(r.edits.count >= 3)
+    }
+
+    @Test func editsInsideABlockAreDropped() async throws {
+        // The model "fixes" a word inside the code too: dropped.
+        let fake = FakeCorrector(fixes + [("engine", "teh engine")])
+        let r = try await CheckPipeline(client: fake).check(Self.text)
+        let codeRange = (Self.text as NSString).range(of: Self.code)
+        #expect(r.edits.allSatisfy { NSIntersectionRange($0.range, codeRange).length == 0 })
+    }
+
+    @Test func protectTokensOffSendsEverything() async throws {
+        let fake = FakeCorrector(fixes)
+        let pipe = CheckPipeline(client: fake)
+        await pipe.setOptions(CheckOptions(protectTokens: false))
+        let r = try await pipe.check(Self.text)
+        #expect(fake.calls.count == 6 && r.protectedChunks == 0)
+    }
+
+    @Test func aSelectionSkipsBlockDetection() async throws {
+        let fake = FakeCorrector(fixes)
+        let r = try await CheckPipeline(client: fake).check(Self.code, scope: .init(maxLength: .max, protectBlocks: false))
+        #expect(fake.calls.count == 4 && r.protectedChunks == 0)
+    }
+
+    @Test func allCodeFieldIsAllProtected() async throws {
+        let fake = FakeCorrector(fixes)
+        let r = try await CheckPipeline(client: fake).check(Self.code + "\n\n" + Self.code)
+        #expect(fake.calls.isEmpty && r.edits.isEmpty && r.protectedChunks == r.totalChunks && r.totalChunks == 8)
+    }
+
+    @Test func engineProtectsBlocksToo() async throws {
+        let fake = FakeCorrector(fixes)
+        let r = try await ProofreadEngine(client: fake).check(Self.text)
+        #expect(fake.calls == [Self.prose, "We was late tomorow."])
+        let codeRange = (Self.text as NSString).range(of: Self.code)
+        #expect(r.edits.allSatisfy { NSIntersectionRange($0.range, codeRange).length == 0 })
+        let sel = try await ProofreadEngine(client: FakeCorrector(fixes)).check(Self.code, protectBlocks: false)
+        #expect(sel.skippedChunks == 0)
+    }
+
+    @Test func languageGateBlanksBlocks() {
+        let blanked = LanguageGate.blanked(Self.text, extra: CodeDetector.blocks(in: Self.text)) as String
+        #expect(!blanked.contains("engine"))
+        #expect(blanked.contains("answer"))
+    }
+
+    @Test func reconcileClearsFixesWhenABlockAppears() async throws {
+        // The user pastes code under a fix: the next pass covers the paragraph with no edit there.
+        let fake = FakeCorrector(fixes)
+        let before = "I dont know teh answer yet.\n\nteh engine = run(text)"
+        let r1 = try await CheckPipeline(client: fake).check(before)
+        var list = FixList(text: before, edits: r1.edits)
+        #expect(list.pendingCount >= 2)
+        let after = before + "\n" + Self.code
+        let r2 = try await CheckPipeline(client: FakeCorrector(fixes)).check(after)
+        _ = list.textEdited(try #require(TextChange.between(before, after)))
+        list.reconcile(edits: r2.edits, covered: r2.covered)
+        let codeStart = (after as NSString).range(of: Self.code).location
+        #expect(list.fixes.allSatisfy { $0.edit.range.location < codeStart })
+    }
+}

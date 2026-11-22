@@ -1,5 +1,5 @@
 {
- "_about": "Adversarial cases for CodeDetector (eval/code_report.py), written by a review agent on 2026-11-16: prose that must never count as code, and code that should (reported only).",
+ "_about": "Adversarial cases for CodeDetector (eval/code_report.py), written by a review agent on 2026-11-16: prose that must never count as code, and code that should (reported only). Kind \"mixed\" (added 2026-11-21): prose and code in one field, with `truth` per line (p prose, c code, - blank; blank lines inside code count as c in the lab, here they are skipped); scored by the block metrics.",
  "cases": [
   {
    "name": "slack_inline_fence",
@@ -425,6 +425,146 @@
    "name": "C_jsx",
    "kind": "code",
    "text": "export default function App() {\n  return (\n    <div className=\"app\">\n      <Header title=\"Hi\" />\n      <Main />\n    </div>\n  );\n}"
+  },
+  {
+   "name": "mixed a1: 1 prose line + 8-line Swift",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\n\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}",
+   "truth": "p-cccccccc",
+   "note": "Your scenario, small version"
+  },
+  {
+   "name": "mixed a2: 3 prose lines + 8-line Swift",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\nLet me know what you thinks about the rollout plan and wether we need a feature flag.\n\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}",
+   "truth": "ppp-cccccccc",
+   "note": "Prose on top, code below"
+  },
+  {
+   "name": "mixed a3: 2 prose paragraphs + 24-line Swift",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\n\nLet me know what you thinks about the rollout plan and wether we need a feature flag.\n\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc verify(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc validate(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}",
+   "truth": "pp-p-cccccccccccccccccccccccccc",
+   "note": "Prose on top, big code below"
+  },
+  {
+   "name": "mixed a4: 1 prose line + 24-line Swift",
+   "kind": "mixed",
+   "text": "Here is the function I mentionned yesterday, it still dont handle empty input.\n\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc verify(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc validate(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}",
+   "truth": "p-cccccccccccccccccccccccccc",
+   "note": "Mostly code; current rule fires"
+  },
+  {
+   "name": "mixed a5: Code only (24-line Swift)",
+   "kind": "mixed",
+   "text": "func check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc verify(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nfunc validate(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}",
+   "truth": "cccccccccccccccccccccccccc",
+   "note": "Pure code field"
+  },
+  {
+   "name": "mixed b1: Prose, then Python (12 lines), then prose",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\n\nimport os, sys\ndef load(path):\n    with open(path) as f:\n        data = json.load(f)\n    if not data:\n        raise ValueError(\"empty\")\n    return data\n\nclass Loader:\n    def __init__(self, root):\n        self.root = root\n        self.cache = {}\n\nThe bug only happen when the user have no network and the cache is empty.",
+   "truth": "pp-cccccccccccc-p",
+   "note": "Code sandwiched"
+  },
+  {
+   "name": "mixed b2: Prose, JS snippet, prose",
+   "kind": "mixed",
+   "text": "Here is the function I mentionned yesterday, it still dont handle empty input.\n\nconst express = require('express');\nconst app = express();\napp.get('/', (req, res) => {\n  res.send('hello');\n});\napp.listen(3000, () => console.log('up'));\n\nLet me know what you thinks about the rollout plan and wether we need a feature flag.",
+   "truth": "p-cccccc-p",
+   "note": "Web code"
+  },
+  {
+   "name": "mixed b3: Bug report: prose + terminal session",
+   "kind": "mixed",
+   "text": "The bug only happen when the user have no network and the cache is empty.\n\n$ git status\nOn branch master\nnothing to commit\n$ npm run build\n> app@1.0.0 build\n> tsc -p .\nerror TS2322: Type 'string' is not assignable to type 'number'.\n\nIts a small change but it effect every user, so please review it carefuly.",
+   "truth": "p-ccccccc-p",
+   "note": "Chat or ticket style"
+  },
+  {
+   "name": "mixed b4: Prose + JSON config",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\n\n{\n  \"name\": \"meboki\",\n  \"version\": \"1.0.5\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"jest\"\n  }\n}\n\nLet me know what you thinks about the rollout plan and wether we need a feature flag.",
+   "truth": "p-cccccccc-p",
+   "note": "Config pasted into notes"
+  },
+  {
+   "name": "mixed b5: Prose + stack trace",
+   "kind": "mixed",
+   "text": "The bug only happen when the user have no network and the cache is empty.\n\nTraceback (most recent call last):\n  File \"app.py\", line 12, in main\n    run(cfg)\n  File \"app.py\", line 7, in run\n    return cfg[\"key\"]\nKeyError: 'key'\n\nCan you take a look, its blocking the release.",
+   "truth": "p-cccccc-p",
+   "note": "Crash report"
+  },
+  {
+   "name": "mixed c1: Long prose (6 lines) + 3 code lines",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\nLet me know what you thinks about the rollout plan and wether we need a feature flag.\nThe bug only happen when the user have no network and the cache is empty.\nHere is the function I mentionned yesterday, it still dont handle empty input.\nI think we shoud update the config before the release tomorow.\n\nlet result = engine.run(text)\nguard result.ok else { return }\nreturn true",
+   "truth": "pppppp-ccc",
+   "note": "Code is a small share"
+  },
+  {
+   "name": "mixed c2: Long prose (6 lines) + 12-line Python",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\nLet me know what you thinks about the rollout plan and wether we need a feature flag.\nThe bug only happen when the user have no network and the cache is empty.\nHere is the function I mentionned yesterday, it still dont handle empty input.\nI think we shoud update the config before the release tomorow.\n\nimport os, sys\ndef load(path):\n    with open(path) as f:\n        data = json.load(f)\n    if not data:\n        raise ValueError(\"empty\")\n    return data\n\nclass Loader:\n    def __init__(self, root):\n        self.root = root\n        self.cache = {}",
+   "truth": "pppppp-cccccccccccc",
+   "note": "Code ~35 percent"
+  },
+  {
+   "name": "mixed c3: Prose with fenced code block",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\n\n```\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n```\n\nLet me know what you thinks about the rollout plan and wether we need a feature flag.",
+   "truth": "p-cccccccccc-p",
+   "note": "Fences already protected"
+  },
+  {
+   "name": "mixed c4: Tutorial: prose, code, prose, code",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\n\nfunc check(text: String) -> Bool {\n    let result = engine.run(text)\n    guard result.ok else { return false }\n    for item in result.items {\n        print(item.name)\n    }\n    return true\n}\n\nThe bug only happen when the user have no network and the cache is empty.\n\nconst express = require('express');\nconst app = express();\napp.get('/', (req, res) => {\n  res.send('hello');\n});\napp.listen(3000, () => console.log('up'));\n\nLet me know what you thinks about the rollout plan and wether we need a feature flag.",
+   "truth": "p-cccccccc-p-cccccc-p",
+   "note": "Interleaved"
+  },
+  {
+   "name": "mixed d1: One line of code in a sentence",
+   "kind": "mixed",
+   "text": "To fix it, run `git pull` and then restart the app, it should works after that.",
+   "truth": "p",
+   "note": "Must stay prose"
+  },
+  {
+   "name": "mixed d2: Prose + 2 code lines",
+   "kind": "mixed",
+   "text": "I think we shoud update the config before the release tomorow.\nIts a small change but it effect every user, so please review it carefuly.\nLet me know what you thinks about the rollout plan and wether we need a feature flag.\n\nimport SwiftUI\nlet x = 3",
+   "truth": "ppp-cc",
+   "note": "Short snippet"
+  },
+  {
+   "name": "mixed e1: Notes with math (x = 3) lines",
+   "kind": "mixed",
+   "text": "Homework notes, I dont get the second one.\nx = 3\ny = x + 2\nz = y * 4\nSo z is 20, right? Please chek my work.",
+   "truth": "ppppp",
+   "note": "False-positive check: pure prose"
+  },
+  {
+   "name": "mixed e2: Shopping + todo list with arrows",
+   "kind": "mixed",
+   "text": "Todo for today:\n- buy milk -> coffee shop\n- call mom; tell her about sunday\n- fix teh printer\nI wil do it after lunch.",
+   "truth": "ppppp",
+   "note": "False-positive check: pure prose"
+  },
+  {
+   "name": "mixed e3: Chat with one shell command",
+   "kind": "mixed",
+   "text": "Hey, did you try this?\ngit pull --rebase\nIt worked for me yesterday, but I dont know about your branch.",
+   "truth": "ppp",
+   "note": "False-positive check: pure prose"
+  },
+  {
+   "name": "mixed e4: Prose about SQL, one query line",
+   "kind": "mixed",
+   "text": "The report is slow, I think the query need an index on the user table.\nSELECT name FROM users WHERE id = 1\nCan you check it please.",
+   "truth": "ppp",
+   "note": "False-positive check"
   }
  ]
 }

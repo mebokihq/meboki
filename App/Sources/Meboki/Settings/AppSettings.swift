@@ -392,11 +392,11 @@ final class AppSettings: ObservableObject {
 
     /// One field's verdict from the automatic check, for learned Manual. Counted only for apps that aren't on
     /// the built-in list and that the user never set a mode for. Returns true when the app was just learned.
-    func noteField(bundleID: String, verdict: CodeDetector.Verdict) -> Bool {
+    func noteField(bundleID: String, verdict: CodeDetector.Verdict, residualProse: Bool = false) -> Bool {
         guard appModes[bundleID] == nil, AppRules.category(of: bundleID) == nil,
-              CodeAppLearner.isEvidence(verdict) else { return false }
+              CodeAppLearner.isEvidence(verdict, residualProse: residualProse) else { return false }
         var l = codeLearning
-        let learned = l.note(bundleID, verdict: verdict)
+        let learned = l.note(bundleID, verdict: verdict, residualProse: residualProse)
         if l != codeLearning { codeLearning = l }
         return learned
     }

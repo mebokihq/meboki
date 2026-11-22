@@ -1599,7 +1599,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             do {
                 await pipe.setClient(corrector, sameModel: true)
                 await pipe.setOptions(options)
-                let result = try await pipe.check(scopeText, scope: .init(maxLength: .max)) { partial in
+                // A selection is checked as it is: no code blocks are looked for in it.
+                let wholeField = scope.location == 0 && scope.length == ns.length
+                let result = try await pipe.check(scopeText, scope: .init(maxLength: .max, protectBlocks: wholeField)) { partial in
                     let done = partial.covered.count, total = partial.totalChunks
                     guard total > 1, done < total else { return }
                     Task { @MainActor in
@@ -1627,6 +1629,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if list.isEmpty, result.foreignChunks > 0, result.foreignChunks == result.totalChunks {
                     // Nothing in the text is English (`LanguageGate`): say so instead of "No mistakes found".
                     self.toast(.info, "This text isn't in English.", detail: "Meboki checks English only",
+                               near: snap.frame)
+                    return
+                }
+                if list.isEmpty, result.totalChunks > 0, result.protectedChunks == result.totalChunks {
+                    // Everything is code or links (`ProtectedTokens`): not "No mistakes found".
+                    self.toast(.info, "Only code here, nothing to check.", detail: "Select text to check it anyway",
                                near: snap.frame)
                     return
                 }
@@ -2052,8 +2060,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func requestLiveCheck(_ s: Session, typing: Bool = false) {
         guard let scheduler = s.scheduler, liveCheckAllowed(s) else { return }
         let text = s.list.text
-        // An automatic review whose field now holds code: no re-check (the fixes already shown stay).
-        if s.auto, CodeDetector.looksLikeCode(text) { return }
+        // An automatic review whose field now holds nothing but code: no model call, but the fixes already
+        // shown are cleared (every paragraph counts as checked, with no edits). A field with code and prose
+        // is checked as usual: its code blocks are protected (`CheckPipeline`).
+        if s.auto, CodeDetector.skipsAutomaticCheck(CodeDetector.scan(text), protectTokens: settings.protectTokens) {
+            guard var cleared = session, cleared.live, cleared.list.text == text else { return }
+            cleared.list.reconcile(edits: [], covered: [NSRange(location: 0, length: (text as NSString).length)])
+            session = cleared
+            refreshUnderlines()
+            showLiveIsland()
+            return
+        }
         if usingLocal {
             guard case .ready = server.state else {
                 // Unloaded while idle: load it again; `serverReady` re-points the pipeline and asks again.
@@ -2559,18 +2576,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if caretOnly, text == t.requested { return }
-        let verdict = CodeDetector.verdict(text)
-        if !t.judged, CodeAppLearner.isEvidence(verdict) {
+        let scan = CodeDetector.scan(text)
+        let verdict = scan.verdict
+        if !t.judged, CodeAppLearner.isEvidence(verdict, residualProse: scan.hasResidualProse) {
             t.judged = true
             autoTarget = t
-            if learnFromField(t, verdict: verdict) { return }
+            if learnFromField(t, verdict: verdict, residualProse: scan.hasResidualProse) { return }
         }
-        // A field that holds code (a script, JSON, a terminal session) in an app that isn't on the skip list:
-        // no automatic check while it looks like code. ⌃⌥G still checks it.
-        if verdict.isCode {
+        // A field that holds only code (a script, JSON, a terminal session) in an app that isn't on the skip
+        // list: no automatic check while it looks like code. Select text and press ⌃⌥G to check it anyway.
+        if CodeDetector.skipsAutomaticCheck(scan, protectTokens: settings.protectTokens) {
             if !t.code {
                 let app = NSRunningApplication(processIdentifier: t.pid)?.bundleIdentifier ?? "pid \(t.pid)"
-                Log.write("auto: the field in \(app) looks like code; no automatic check (⌃⌥G still works)")
+                Log.write("auto: the field in \(app) looks like code; no automatic check (select text and press \(settings.hotkey.display) to check it)")
                 autoTarget?.code = true
             }
             stopAutoCheck()
@@ -2649,13 +2667,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// Learned Manual: counts this field's verdict for its app (once per field). When the app has just been
     /// learned as a code editor, it goes Manual: the automatic check stops following it, and a message says so
     /// once, with a way to change it. Returns true then.
-    private func learnFromField(_ t: AutoTarget, verdict: CodeDetector.Verdict) -> Bool {
+    private func learnFromField(_ t: AutoTarget, verdict: CodeDetector.Verdict, residualProse: Bool) -> Bool {
         guard let app = NSRunningApplication(processIdentifier: t.pid), let id = app.bundleIdentifier else { return false }
         var seen = learnSeen[id, default: []]
         guard !seen.contains(where: { CFEqual($0, t.element) }) else { return false }
         seen.append(t.element)
         learnSeen[id] = Array(seen.suffix(50))
-        guard settings.noteField(bundleID: id, verdict: verdict) else { return false }
+        guard settings.noteField(bundleID: id, verdict: verdict, residualProse: residualProse) else { return false }
         let name = app.localizedName ?? id
         Log.write("auto: \(id) looks like a code editor (\(CodeAppLearner.threshold) code fields, no prose); "
             + "Manual by default now")
@@ -2665,7 +2683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         stopAutoCheck()
         DispatchQueue.main.async { [weak self] in self?.appModesChanged() }
         toast(.info, "\(name) looks like a code editor.",
-              detail: "Meboki won't check as you type there; \(settings.hotkey.display) still works",
+              detail: "Meboki won't check as you type there; select text and press \(settings.hotkey.display) to check it",
               actionTitle: "Change", action: { [weak self] in self?.showSettings(pane: .apps) },
               near: nil, duration: 8)
         return true

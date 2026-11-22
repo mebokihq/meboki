@@ -14,7 +14,7 @@ Quick start: `swift build && swift test`, then `Scripts/make-app.sh --install` t
 - **Automatic check** (`FocusTracker`, needs the local model and "Underline mistakes as I type"): the focused editable text area is checked after a typing pause or on focus. Underlines only; Esc mutes the field until focus moves; ignored fixes stay ignored (`IgnoredFixes`).
 - **Live review:** after a whole-field check with the local model, typing keeps the review: fixes follow the text and edited sentences are checked again after a pause (`CheckScheduler`). With a selection or cloud, typing ends the review.
 - **Fix keys:** ⏎ applies all, ⇧⏎ this one, ⇥ ignores, ← → move, Esc closes. Esc with no popup, or leaving the field, clears the underlines.
-- **Skipped automatically:** single-line fields (except prose fields that only report as single-line: the Messages composer, Reminders titles and notes; `AX.isProseTextField`), apps set to Manual or Off (`AppRules`: terminals and code editors Manual, password managers and remote desktops Off), fields that look like code (`CodeDetector`), and, with "Skip text that isn't English" on, foreign text (`LanguageGate`).
+- **Skipped automatically:** single-line fields (except prose fields that only report as single-line: the Messages composer, Reminders titles and notes; `AX.isProseTextField`), apps set to Manual or Off (`AppRules`: terminals and code editors Manual, password managers and remote desktops Off), fields that hold nothing but code (`CodeDetector`; a field with prose and code is checked, its code blocks protected), and, with "Skip text that isn't English" on, foreign text (`LanguageGate`).
 
 ### Reading and writing fields
 
@@ -131,9 +131,9 @@ Packages/Core/Sources/MebokiCore/        pure Swift, no AppKit, unit-tested
   FixCategory.swift             diff classifier (spelling / grammar / clarity / punctuation) + reason templates
   CheckOptions.swift            EnglishVariant, CheckLevel, CheckOptions (the settings a check uses)
   EditFilter.swift              settings post-filters on edits: casual text, slang, UK collective nouns, check level
-  ProtectedTokens.swift         URLs, emails, @mentions, #tags, code, paths, identifiers, emoji, non-Latin words
+  ProtectedTokens.swift         URLs, emails, @mentions, #tags, code, paths, identifiers, emoji, non-Latin words; `extra:` merges in the code blocks `CheckPipeline` / `ProofreadEngine` find once per check (off for a selection, `Scope.protectBlocks`)
   AppRules.swift                AppMode (on / casual / manual / off), the built-in skip list (terminals and code editors, password managers, remote desktops) with default modes, chat apps; CodeAppLearner (learned Manual: 3 code fields, no prose); the user's choice always wins
-  CodeDetector.swift            a field that looks like code (precision-first line shapes): the automatic check skips it
+  CodeDetector.swift            precision-first line shapes: `scan` returns the verdict (a field that is code), the code blocks (runs of code lines with at least two strong lines, one blank line may sit inside; `blocks(in:)` on the whole text) and whether real prose is left outside them; the automatic check skips only a field that is code and nothing else (`skipsAutomaticCheck`)
   LanguageGate.swift            text that isn't English (NLLanguageRecognizer, precision-first rules): not sent when "Skip text that isn't English" is on
   RewriteDetector.swift         rewrite detection (guards measured with `eval/rewrite_report.py`)
   SpellingVariant.swift         US/UK respelling pairs (never respell a correct word into the other variant)
@@ -177,7 +177,7 @@ python3 eval/guard.py eval/results_text       # scores after post-filters
 python3 eval/false_fixes_report.py            # known wrong suggestions stay fixed (no model); add a line per new one
 python3 eval/settings_report.py eval/results_settings   # settings (US/UK, level, casual, protect) via Core
 python3 eval/language_report.py               # language gate: English never left out, foreign left out (no model)
-python3 eval/code_report.py                   # code detector: prose never taken for code, source files are (no model)
+python3 eval/code_report.py                   # code detector: prose never taken for code, no block outside fences, source files are code with no residual prose, mixed cases (no model)
 MEBOKI_PROSE_DIRS=<dir> python3 eval/code_report.py   # same, plus every .md under <dir> as extra prose
 ```
 

@@ -30,13 +30,14 @@ public enum ProtectedTokens {
         ("[\\p{L}\\p{M}]*[\\p{L}&&\\P{Script=Latin}][\\p{L}\\p{M}]*", false), // non-Latin words
     ].map { (try! NSRegularExpression(pattern: $0.0), $0.1) }
 
-    /// Protected UTF-16 ranges in `text`, sorted and merged. `words: false` leaves out words in a non-Latin
+    /// Protected UTF-16 ranges in `text`, sorted and merged. `extra`: ranges found elsewhere (the code blocks of
+    /// `CodeDetector`), merged in. `words: false` leaves out words in a non-Latin
     /// script (the last pattern): `LanguageGate` blanks out code and links before it guesses the language,
     /// but must still see the words themselves.
-    public static func ranges(in text: String, words: Bool = true) -> [NSRange] {
+    public static func ranges(in text: String, words: Bool = true, extra: [NSRange] = []) -> [NSRange] {
         let ns = text as NSString
         let all = NSRange(location: 0, length: ns.length)
-        var found: [NSRange] = []
+        var found: [NSRange] = extra
         for (re, trim) in words ? patterns[...] : patterns.dropLast() {
             for m in re.matches(in: text, range: all) {
                 var r = m.range

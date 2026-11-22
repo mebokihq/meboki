@@ -70,9 +70,9 @@ public enum LanguageGate {
 
     /// `text` with code, links, emails, @mentions, #tags, paths, identifiers and emoji replaced by spaces, so
     /// they don't sway the guess. Same UTF-16 length, so ranges stay valid. Words in any script are kept.
-    public static func blanked(_ text: String) -> NSString {
+    public static func blanked(_ text: String, extra: [NSRange] = []) -> NSString {
         let out = NSMutableString(string: text)
-        for r in ProtectedTokens.ranges(in: text, words: false) {
+        for r in ProtectedTokens.ranges(in: text, words: false, extra: extra) {
             out.replaceCharacters(in: r, with: String(repeating: " ", count: r.length))
         }
         return out

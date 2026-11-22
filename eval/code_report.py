@@ -12,6 +12,12 @@ Scored (precision first: a prose field taken for code silently loses its automat
             look like code): none may count as code
   code      the repo's own source (Swift, Python, shell, JSON, plist, HTML) as whole files: all must count
             as code
+  blocks    (protected runs of code lines inside a field, `CodeDetector.blocks`, whole text)
+            no block outside fenced code in any prose input (docs have fences: those are protected anyway)
+  residual  no repo source file taken for code may show residual prose (it would get an automatic check)
+  mixed     eval/code_cases.json "mixed" cases (prose and code in one field, truth per line): no prose line may
+            sit inside a block (scored: prose-only cases have no block at all); exposed code chars and lost prose
+            chars are reported against the whole-field rule of before (code only when 70% of the field is code)
 Reported only: eval/code_cases.json "code" cases, code snippets (every 20 lines of each source file; a slice from inside a docstring or a
 comment block is prose, so 100% isn't expected) and doc sections that are mostly a fenced block.
 """
@@ -27,9 +33,11 @@ TOOL = os.path.join(ROOT, ".build", "debug", "meboki-eval-filter")
 # The repo's Markdown docs, plus every .md file under the folders in MEBOKI_PROSE_DIRS (os.pathsep-separated),
 # for scoring against a bigger prose set kept outside the repo.
 DOCS = sorted({os.path.relpath(p, ROOT) for p in glob.glob(os.path.join(ROOT, "**", "*.md"), recursive=True)
-               if os.sep + "." not in os.path.relpath(p, ROOT) and not os.path.relpath(p, ROOT).startswith(".")}
+               if os.sep + "." not in os.path.relpath(p, ROOT) and not os.path.relpath(p, ROOT).startswith(".")
+               and "node_modules" not in p}
               | {os.path.abspath(p) for d in os.environ.get("MEBOKI_PROSE_DIRS", "").split(os.pathsep) if d
-                 for p in glob.glob(os.path.join(d, "**", "*.md"), recursive=True)})
+                 for p in glob.glob(os.path.join(d, "**", "*.md"), recursive=True)
+                 if "node_modules" not in p})
 SOURCES = ["App/Sources/**/*.swift", "Packages/Core/**/*.swift", "eval/*.py", "eval/filter/*.swift",
            "Scripts/*.sh", "Package.swift", "eval/*.json", "App/Info.plist", "docs/bench/*.html"]
 CHUNK = 20
@@ -41,6 +49,42 @@ def detect(texts):
     lines = "\n".join(json.dumps({"text": t}, ensure_ascii=False) for t in texts) + "\n"
     p = subprocess.run([TOOL, "--code"], input=lines, capture_output=True, text=True, check=True)
     return [json.loads(l) for l in p.stdout.splitlines()]
+
+
+def u16(text, i):
+    """UTF-16 offset of code point index i."""
+    return len(text[:i].encode("utf-16-le")) // 2
+
+
+def outside_fences(text, blocks):
+    """Characters (UTF-16) of the blocks that lie outside ``` fences."""
+    fences = [(u16(text, m.start()), u16(text, m.end())) for m in re.finditer(r"```.*?```", text, flags=re.S)]
+    n = 0
+    raw = text.encode("utf-16-le")
+    for loc, length in blocks:
+        # A block of nothing but HTML tags is markup, rightly protected (a README's header).
+        block = raw[2 * loc:2 * (loc + length)].decode("utf-16-le", errors="ignore")
+        if all(l.strip().startswith("<") for l in block.split("\n") if l.strip()):
+            continue
+        covered = sum(max(0, min(loc + length, b) - max(loc, a)) for a, b in fences)
+        n += length - covered
+    return n
+
+
+def row_marks(text, blocks, fenced=True):
+    """Per row of a mixed case: (row, 'c' inside a block or fence, else 'p'), blank rows left out."""
+    spans = list(blocks)
+    if fenced:
+        spans += [(u16(text, m.start()), u16(text, m.end()) - u16(text, m.start()))
+                  for m in re.finditer(r"```.*?```", text, flags=re.S)]
+    out, off = [], 0
+    for row in text.split("\n"):
+        n = len(row.encode("utf-16-le")) // 2
+        if row.strip():
+            mid = off + n // 2
+            out.append((row, any(a <= mid < a + l for a, l in spans)))
+        off += n + 1
+    return out
 
 
 def read(path):
@@ -96,14 +140,16 @@ def main():
     cases = json.load(open(os.path.join(HERE, "code_cases.json"), encoding="utf-8"))["cases"]
     prose += [("case " + c["name"], c["text"]) for c in cases if c["kind"] == "prose"]
     code_cases = [(c["name"], c["text"]) for c in cases if c["kind"] == "code"]
+    mixed = [c for c in cases if c["kind"] == "mixed"]
     files = sources()
     snippets = [(name, c) for name, text in files for c in chunks(text)]
     out = detect([t for _, t in prose] + [t for _, t in files] + [t for _, t in snippets]
-                 + [t for _, t in mostly_code] + [t for _, t in code_cases])
+                 + [t for _, t in mostly_code] + [t for _, t in code_cases] + [c["text"] for c in mixed])
     pr, fi = out[:len(prose)], out[len(prose):len(prose) + len(files)]
     sn = out[len(prose) + len(files):len(prose) + len(files) + len(snippets)]
     mc = out[len(prose) + len(files) + len(snippets):len(prose) + len(files) + len(snippets) + len(mostly_code)]
-    cc = out[len(out) - len(code_cases):]
+    mx = out[len(out) - len(mixed):]
+    cc = out[len(out) - len(mixed) - len(code_cases):len(out) - len(mixed)]
 
     failures = 0
     bad = [(n, t, v) for (n, t), v in zip(prose, pr) if v["code"]]
@@ -118,11 +164,58 @@ def main():
         for share, n, t in worst:
             print(f"  share {share:.2f} {n}: {t.strip()[:70]!r}")
 
+    stray = [(n, t, outside_fences(t, v["blocks"])) for (n, t), v in zip(prose, pr) if v["blocks"]]
+    stray = [s for s in stray if s[2] > 0]
+    print(f"blocks    {len(prose) - len(stray)}/{len(prose)} prose inputs with no block outside fenced code "
+          f"({sum(1 for v in pr if v['blocks'])} have blocks inside fences)")
+    for n, t, k in stray:
+        print(f"  BLOCK?   {n}: {k} chars outside fences  {t.strip()[:70]!r}")
+    failures += len(stray)
+
     missed = [(n, v) for (n, _), v in zip(files, fi) if not v["code"]]
     print(f"code      {len(files) - len(missed)}/{len(files)} source files taken for code")
     for n, v in missed:
         print(f"  PROSE?   {n}: {v['codeChars']}/{v['totalChars']} chars, {v['codeLines']}/{v['lines']} lines")
     failures += len(missed)
+
+    # CodeDetectorTests.swift holds prose samples in string literals: real prose among code.
+    resid = [(n, v) for (n, _), v in zip(files, fi) if v["code"] and v["residual"] and not n.endswith("CodeDetectorTests.swift")]
+    print(f"residual  {len(files) - len(missed) - len(resid)}/{len(files) - len(missed)} source files taken for code "
+          f"have no residual prose (all would stay skipped)")
+    for n, v in resid:
+        print(f"  PROSE?   {n}: code with residual prose")
+    failures += len(resid)
+
+    lost = exposed = code_total = prose_total = 0
+    old_exposed = old_lost = 0
+    bad_mixed = []
+    for c, v in zip(mixed, mx):
+        marks = row_marks(c["text"], v["blocks"])
+        truth = [t for row, t in zip(c["text"].split("\n"), c["truth"]) if row.strip()]
+        old_code = v["code"]  # the old rule: the whole field is code (skipped: prose lost) or prose (code exposed)
+        case_lost = case_exposed = 0
+        for (row, inb), t in zip(marks, truth):
+            k = len(row.strip())
+            if t == "c":
+                code_total += k
+                if not inb: case_exposed += k
+                if not old_code: old_exposed += k
+            else:
+                prose_total += k
+                if inb: case_lost += k
+                if old_code: old_lost += k
+        exposed += case_exposed
+        lost += case_lost
+        if case_lost:
+            bad_mixed.append((c["name"], case_lost))
+        if verbose:
+            print(f"  mixed {c['name'][:48]:48} exposed {case_exposed:4} lost {case_lost:4} "
+                  f"(before: {'skipped whole' if old_code else 'all sent'})")
+    print(f"mixed     {len(mixed)} cases: code chars sent to the model {exposed}/{code_total} (before {old_exposed}), "
+          f"prose chars inside blocks {lost}/{prose_total} (before: {old_lost} skipped with a code field)")
+    for n, k in bad_mixed:
+        print(f"  LOST     {n}: {k} prose chars inside a block")
+    failures += len(bad_mixed)
 
     hit = sum(1 for v in sn if v["code"])
     print(f"snippets  {hit}/{len(sn)} code ({100 * hit / max(1, len(sn)):.1f}%, not scored)")

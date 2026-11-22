@@ -1,7 +1,8 @@
 import Foundation
 
 /// Tells a field that holds code (a script, JSON, a terminal session, a stack trace) from prose, so the automatic
-/// check leaves it alone in apps that aren't on the built-in skip list (`AppRules`). ⌃⌥G still checks it.
+/// check leaves it alone in apps that aren't on the built-in skip list (`AppRules`). A selection checked with ⌃⌥G is
+/// never skipped.
 ///
 /// Precision first: a prose field taken for code silently loses its automatic check (and feeds learned Manual,
 /// `CodeAppLearner`). Every line gets a level:
@@ -42,37 +43,68 @@ public enum CodeDetector {
     /// A long line (minified JSON) is judged by its start; this also bounds every pattern's work per line.
     static let maxLineCharacters = 500
 
+    /// One scan of a field: the verdict, the code blocks inside it and whether prose is left outside them.
+    public struct Scan: Equatable, Sendable {
+        public var verdict = Verdict()
+        /// Runs of code lines inside the text (UTF-16 ranges, first to last code line): what a check protects.
+        public var blocks: [NSRange] = []
+        /// Real sentences remain outside the blocks (`hasResidualProse`).
+        public var hasResidualProse = false
+    }
+
     public static func looksLikeCode(_ text: String) -> Bool {
         verdict(text).isCode
     }
 
     public static func verdict(_ text: String) -> Verdict {
+        scan(text).verdict
+    }
+
+    /// The code blocks of the whole `text` (no scan cap: for the check pipeline, which runs off the main thread).
+    public static func blocks(in text: String) -> [NSRange] {
+        scan(text, maxCharacters: .max).blocks
+    }
+
+    /// True when the automatic check skips the field: it is code and nothing but code. With code and prose,
+    /// the prose is checked and the code blocks are protected. With "Protect names, code and links" off
+    /// (`protectTokens`) nothing is protected, so a field that looks like code stays skipped as a whole.
+    public static func skipsAutomaticCheck(_ scan: Scan, protectTokens: Bool) -> Bool {
+        scan.verdict.isCode && (!protectTokens || !scan.hasResidualProse)
+    }
+
+    /// Grades every line once. Only the first `maxCharacters` are looked at (the main thread passes the default).
+    public static func scan(_ text: String, maxCharacters: Int = maxScanCharacters) -> Scan {
+        var out = Scan()
         var v = Verdict()
-        let scan = text.utf16.count > maxScanCharacters ? String(text.prefix(maxScanCharacters)) : text
-        let rows = scan.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        let scan = text.utf16.count > maxCharacters ? String(text.prefix(maxCharacters)) : text
+        let rows = splitRows(scan)
         // Too short to be code (`minCodeChars`): counted, not judged.
         if scan.utf16.count < minCodeChars {
-            for row in rows {
+            for (row, _) in rows {
                 let n = row.trimmingCharacters(in: .whitespaces).count
                 if n > 0 { v.lines += 1; v.totalChars += n }
             }
-            return v
+            out.verdict = v
+            return out
         }
         // A fence that never closes (a chat message with one stray ```) opens nothing.
-        let fences = rows.indices.filter { isFence(rows[$0]) }
+        let fences = rows.indices.filter { isFence(rows[$0].text) }
         let lastFence = fences.count % 2 == 1 ? fences.last : nil
 
         var fenced = false        // inside a Markdown ``` block
         var docstring = false     // inside a Python """ string
         var blockComment = false  // inside /* … */
         var shellOutput = false   // after a `$ command` line: its output, until a blank line or a sentence
-        for (i, row) in rows.enumerated() {
+        // Per row, for the blocks: the level, with a line of lowercase prose after a shell command left out.
+        var levels = [Level](repeating: .none, count: rows.count)
+        for (i, (row, _)) in rows.enumerated() {
             let line = row.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty else {
                 shellOutput = false
                 continue
             }
             let level: Level
+            var blockLevel: Level?
             if isFence(row), i != lastFence {
                 fenced.toggle()
                 level = .strong
@@ -86,6 +118,9 @@ public enum CodeDetector {
                 level = .strong
             } else if shellOutput, !isSentence(line) {
                 level = .weak
+                // Lowercase prose after a command, not output (output has numbers, colons, symbols).
+                if line.first?.isLowercase == true, isProseLine(line),
+                   !line.contains(where: { $0.isNumber || $0 == ":" }) { blockLevel = Level.none }
             } else {
                 shellOutput = false
                 let quotes = line.components(separatedBy: "\"\"\"").count - 1
@@ -94,9 +129,14 @@ public enum CodeDetector {
                     level = .weak
                 } else {
                     level = lineLevel(row.count > maxLineCharacters ? row.prefix(maxLineCharacters) : row)
-                    if line.hasPrefix("/*"), !line.contains("*/") { blockComment = true }
+                    // A `/*` that never closes opens nothing: it would swallow the rest of the text.
+                    if line.hasPrefix("/*"), !line.contains("*/"),
+                       rows[(i + 1)...].contains(where: { $0.text.contains("*/") }) { blockComment = true }
                 }
             }
+            // `#if you know you know`: a hashtag line that reads as chat is no preprocessor directive.
+            if level == .strong, blockLevel == nil, line.hasPrefix("#"), !fenced, isProseLine(line) { blockLevel = .weak }
+            levels[i] = blockLevel ?? level
             let n = line.count
             v.lines += 1
             v.totalChars += n
@@ -106,7 +146,123 @@ public enum CodeDetector {
             }
             if level == .strong { v.strongLines += 1 }
         }
-        return v
+        out.verdict = v
+        out.blocks = blocks(rows: rows, levels: levels)
+        out.hasResidualProse = residualProse(rows: rows, levels: levels, blocks: out.blocks)
+        return out
+    }
+
+    /// The text's lines with the UTF-16 offset each starts at.
+    static func splitRows(_ text: String) -> [(text: Substring, offset: Int)] {
+        var rows: [(Substring, Int)] = []
+        var start = text.startIndex
+        var startOffset = 0, offset = 0
+        for i in text.indices {
+            let ch = text[i]
+            if ch.isNewline {
+                rows.append((text[start..<i], startOffset))
+                offset += ch.utf16.count
+                start = text.index(after: i)
+                startOffset = offset
+            } else {
+                offset += ch.utf16.count
+            }
+        }
+        rows.append((text[start...], startOffset))
+        return rows
+    }
+
+    /// A block: a run of code lines (blank gap of one line at most), kept when two lines in it are strong.
+    /// A weak line (`x = 3`, `return true`) joins the run only touching it or between strong lines; one at the
+    /// edge after a blank line stays out unless it carries code symbols, so a chat line isn't swallowed.
+    static func blocks(rows: [(text: Substring, offset: Int)], levels: [Level]) -> [NSRange] {
+        func blank(_ i: Int) -> Bool { rows[i].text.allSatisfy(\.isWhitespace) }
+        var out: [NSRange] = []
+        let n = rows.count
+        var i = 0
+        while i < n {
+            guard levels[i] != .none else { i += 1; continue }
+            var first = i, last = i, j = i
+            while j < n {
+                if levels[j] != .none { last = j; j += 1 }
+                else if blank(j), j + 1 < n, levels[j + 1] != .none { j += 1 }
+                else { break }
+            }
+            i = last + 1
+            func edgeWeak(_ k: Int) -> Bool {
+                levels[k] == .weak && !rows[k].text.contains(where: { edgeSymbols.contains($0) })
+            }
+            // A weak line cut off from the rest by a blank line, at the edge, without code symbols: left out.
+            while first < last, edgeWeak(first), blank(first + 1) {
+                first += 1
+                while first < last, blank(first) { first += 1 }
+            }
+            while last > first, edgeWeak(last), blank(last - 1) {
+                last -= 1
+                while last > first, blank(last) { last -= 1 }
+            }
+            guard (first...last).filter({ levels[$0] == .strong }).count >= 2 else { continue }
+            let head = rows[first].text.prefix(while: { $0 == " " || $0 == "\t" }).utf16.count
+            let start = rows[first].offset + head
+            let end = rows[last].offset + rows[last].text.utf16.count
+            if end > start { out.append(NSRange(location: start, length: end - start)) }
+        }
+        return out
+    }
+
+    static let edgeSymbols: Set<Character> = ["{", "}", "[", "]", "(", ")", ";", "=", "<", ">", "$", "\\", "&", "|", "`"]
+    static let commentMarkers = ["#", "--", ";", "%", "*"]
+
+    /// True when a real sentence is left outside the blocks: lines that aren't code, aren't comment lines of some
+    /// language, and read as prose, about 30 characters of them in all (a pure code file has odd lines too:
+    /// `Thread 0 Crashed:`, a log line, a heading).
+    static func residualProse(rows: [(text: Substring, offset: Int)], levels: [Level], blocks: [NSRange]) -> Bool {
+        var chars = 0
+        var k = 0
+        for (i, row) in rows.enumerated() {
+            guard levels[i] == .none else { continue }
+            let line = row.text.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !commentMarkers.contains(where: { line.hasPrefix($0) }) else { continue }
+            while k < blocks.count, NSMaxRange(blocks[k]) <= row.offset { k += 1 }
+            if k < blocks.count, blocks[k].location <= row.offset + row.text.utf16.count,
+               NSMaxRange(blocks[k]) > row.offset { continue }
+            if isResidualLine(line) { chars += line.count }
+        }
+        return chars >= minResidualChars
+    }
+    static let minResidualChars = 30
+
+    /// A line of real prose among code: a sentence, or five words or more, mostly letters, with no code symbol
+    /// and none of the shapes code data has (a quote, `_`, `camelCase`, `a.b`, a word with digits, a leading `?`
+    /// `:` `.` `,`, a declaration keyword). A string literal or a continued call must not pass for prose.
+    static func isResidualLine(_ line: String) -> Bool {
+        guard isSentence(line) || isProseLine(line), !line.contains(where: { edgeSymbols.contains($0) }),
+              !line.contains(where: { "\"_#".contains($0) }),
+              let first = line.first, !"?:.,)".contains(first) else { return false }
+        for word in line.split(separator: " ") {
+            let w = Array(word)
+            for k in 1..<max(1, w.count) {
+                let p = w[k - 1], ch = w[k]
+                if p.isLowercase, ch.isUppercase { return false }              // camelCase
+                if (p.isLetter && ch.isNumber) || (p.isNumber && ch.isLetter) { return false }
+                if p == ".", ch.isLetter, k >= 2, w[k - 2].isLetter, w.count > 3 { return false }  // a.b (not e.g.)
+            }
+        }
+        return !declarationWords.contains(String(line.prefix(while: { $0 != " " })))
+    }
+    static let declarationWords: Set<String> = ["func", "def", "fn", "var", "const", "val", "import", "class", "struct",
+                                                "enum", "protocol", "extension", "public", "private", "static", "return",
+                                                "guard", "switch", "catch", "except", "async", "await", "export", "impl",
+                                                "pub", "raise", "yield", "echo", "local", "package", "interface",
+                                                "protected", "internal", "throw", "elif"]
+
+    /// Five words or more, mostly letters, no code symbols.
+    static func isProseLine(_ s: String) -> Bool {
+        guard !s.contains(where: { edgeSymbols.contains($0) }) else { return false }
+        let words = s.split(separator: " ").filter { $0.contains(where: \.isLetter) }
+        guard words.count >= 5 else { return false }
+        let visible = s.filter { !$0.isWhitespace }
+        return Double(visible.filter(\.isLetter).count) >= 0.75 * Double(visible.count)
     }
 
     /// A fence line: ``` at the start, not closed on the same line (```git pull``` is inline code).
@@ -241,8 +397,9 @@ public enum CodeDetector {
 
     // Strong
 
-    /// `<div class="x">`, `</p>`, `<br/>`: a line that is one tag or starts and ends with tags.
-    static let tagLine = try! NSRegularExpression(pattern: #"^</?[A-Za-z][\w:-]*+(?:\s[^<>]*)?/?>(?:.*>)?$"#)
+    /// `<div class="x">`, `</p>`, `<br/>`: a line that is one tag or starts and ends with tags (attributes need
+    /// a `=`, a quote or a `/`: `<Customer name>` in a template isn't a tag).
+    static let tagLine = try! NSRegularExpression(pattern: #"^</?[A-Za-z][\w:-]*+(?:\s+[^<>]*?[=/"'][^<>]*)?/?>(?:.*>)?$"#)
     /// `"name": "Proofreader",`, `"count": 3`, `"items": [` in JSON: a key, then a JSON value.
     static let jsonKey = try! NSRegularExpression(pattern: #"^"[^"]{1,80}"\s*:\s*(?:"(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*|true|false|null|\{|\[)\s*(?:,|\{|\[|\}|\])?$"#)
     /// Minified JSON on one line: `{"id": …` or `[{"id": …`.
@@ -251,7 +408,7 @@ public enum CodeDetector {
     static let stringConcatenation = try! NSRegularExpression(pattern: #"^\+\s*""#)
     /// Stack frames and errors: `File "x.py", line 3, in main`, `at Foo.bar (app.js:12:5)`, `KeyError: 'key'`,
     /// `#3 0x00012ab in main`, `Thread 0 Crashed:`, `2  libsystem 0x0001 …`.
-    static let stackFrame = try! NSRegularExpression(pattern: #"^File "[^"]+", line \d+|^at [\w$<>]++(?:\.[\w$<>\[\]]++)++ ?\(.*:\d+(?::\d+)?\)$|^[A-Z]\w*+(?:Error|Exception)(?::\s|$)|^#\d+\s+0x[0-9a-fA-F]+|^Thread \d+ Crashed|^\d+\s+\S+\s+0x[0-9a-fA-F]+ "#)
+    static let stackFrame = try! NSRegularExpression(pattern: #"^File "[^"]+", line \d+|^at [\w$<>]++(?:\.[\w$<>\[\]]++)++ ?\(.*:\d+(?::\d+)?\)$|^[A-Z]\w*(?:Error|Exception)(?::\s|$)|^#\d+\s+0x[0-9a-fA-F]+|^Thread \d+ Crashed|^\d+\s+\S+\s+0x[0-9a-fA-F]+ "#)
     /// `ls -l` output: `-rw-r--r--  1 user  staff  …`, `drwxr-xr-x@ …`.
     static let fileMode = try! NSRegularExpression(pattern: #"^[-dlcbps][rwxsStT-]{9}[@+.]?\s"#)
     /// `let rgb: UInt32`, `@Published var pane: SettingsPane`, `private var window: NSWindow?`, `const x = 1`.

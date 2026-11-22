@@ -75,13 +75,16 @@ public struct ProofreadEngine: Sendable {
         return options.groupRewrites ? RewriteDetector.group(kept, in: chunk) : kept
     }
 
-    public func check(_ text: String, progress: (@Sendable (Int, Int) -> Void)? = nil) async throws -> Result {
+    /// `protectBlocks`: runs of code lines in the text are protected too (off for a selection).
+    public func check(_ text: String, protectBlocks: Bool = true,
+                      progress: (@Sendable (Int, Int) -> Void)? = nil) async throws -> Result {
         let ns = text as NSString
         let ranges = Self.chunks(of: text)
         // Found on the whole text, so a fenced code block across paragraphs is seen as one.
-        let protected = options.protectTokens ? ProtectedTokens.ranges(in: text) : []
+        let blocks = options.protectTokens && protectBlocks ? CodeDetector.blocks(in: text) : []
+        let protected = options.protectTokens ? ProtectedTokens.ranges(in: text, extra: blocks) : []
         let system = Prompt.system(for: options.variant)
-        let blanked = options.englishOnly ? LanguageGate.blanked(text) : ns
+        let blanked = options.englishOnly ? LanguageGate.blanked(text, extra: blocks) : ns
         var edits: [Edit] = []
         var rejected = 0, skipped = 0, foreign = 0
         for (i, p) in ranges.enumerated() {

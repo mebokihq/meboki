@@ -101,8 +101,13 @@ public actor CheckPipeline {
         /// The check follows typing: a word the caret sits right after may still be half typed ("Li" on the
         /// way to "Like"), so no fix touches it (`wordBeingTyped`). Off for ⌃⌥G and focus checks.
         public var typing: Bool
+        /// Runs of code lines in the text are protected (`CodeDetector.blocks`). Off for a selection: what the
+        /// user selected is checked as it is.
+        public var protectBlocks: Bool
 
-        public init(cursor: Int? = nil, visible: NSRange? = nil, maxLength: Int = 20_000, typing: Bool = false) {
+        public init(cursor: Int? = nil, visible: NSRange? = nil, maxLength: Int = 20_000, typing: Bool = false,
+                    protectBlocks: Bool = true) {
+            self.protectBlocks = protectBlocks
             self.cursor = cursor
             self.visible = visible
             self.maxLength = maxLength
@@ -121,6 +126,8 @@ public actor CheckPipeline {
         /// Paragraphs not sent because they aren't in English (`LanguageGate`). A foreign sentence inside an
         /// English paragraph isn't counted.
         public var foreignChunks: Int = 0
+        /// Paragraphs not sent because protected text (code, links) covers all of them.
+        public var protectedChunks: Int = 0
         /// Paragraphs left out by `Scope.visible` or `Scope.maxLength`.
         public var deferredChunks: Int
         /// Model requests made in this pass (0 when everything came from the cache).
@@ -143,16 +150,19 @@ public actor CheckPipeline {
         let system = Prompt.system(for: options.variant)
         let ns = text as NSString
         let paragraphs = ProofreadEngine.chunks(of: text)
-        let protected = options.protectTokens ? ProtectedTokens.ranges(in: text) : []
-        let blanked = options.englishOnly ? LanguageGate.blanked(text) : ns
+        // Code blocks come from the whole text, graded once (this runs off the main thread: no scan cap).
+        let blocks = options.protectTokens && scope.protectBlocks ? CodeDetector.blocks(in: text) : []
+        let protected = options.protectTokens ? ProtectedTokens.ranges(in: text, extra: blocks) : []
+        let blanked = options.englishOnly ? LanguageGate.blanked(text, extra: blocks) : ns
         let selected = Self.order(paragraphs, scope: scope)
 
         var found: [Int: [Edit]] = [:]  // paragraph index → edits (absolute)
-        var rejected = 0, skipped = 0, foreignChunks = 0, requests = 0
+        var rejected = 0, skipped = 0, foreignChunks = 0, protectedChunks = 0, requests = 0
         var covered: [NSRange] = []
         func result(complete: Bool) -> Result {
             let edits = found.keys.sorted().flatMap { found[$0]! }
             return Result(edits: edits, rejectedChunks: rejected, skippedChunks: skipped, foreignChunks: foreignChunks,
+                          protectedChunks: protectedChunks,
                           deferredChunks: paragraphs.count - selected.count, requests: requests, complete: complete,
                           covered: covered.sorted { $0.location < $1.location }, totalChunks: selected.count)
         }
@@ -241,7 +251,7 @@ public actor CheckPipeline {
             let pr = paragraphs[p]
             if pr.length > maxChunkLength { skipped += 1; covered.append(pr); continue }
             // A paragraph inside a code block: nothing the model may change.
-            if ProtectedTokens.covers(protected, pr) { covered.append(pr); continue }
+            if ProtectedTokens.covers(protected, pr) { protectedChunks += 1; covered.append(pr); continue }
             // Sentences that aren't English: never sent, never cached, and no edits inside them.
             guard let pl = plan(p) else { foreignChunks += 1; covered.append(pr); continue }
             let sentences = pl.sentences, foreign = pl.foreign

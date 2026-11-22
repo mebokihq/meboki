@@ -170,15 +170,17 @@ public struct CodeAppLearner: Codable, Equatable, Sendable {
         (codeFields[bundleID] ?? 0) >= Self.threshold && (proseFields[bundleID] ?? 0) == 0
     }
 
-    /// The verdict says something about the app: code, or enough text to be prose.
-    public static func isEvidence(_ verdict: CodeDetector.Verdict) -> Bool {
-        verdict.isCode || verdict.totalChars >= minProseCharacters
+    /// The verdict says something about the app: code, or enough text to be prose. A field that is code with
+    /// real sentences left outside its blocks (`residualProse`) is mixed, so it says nothing either way.
+    public static func isEvidence(_ verdict: CodeDetector.Verdict, residualProse: Bool = false) -> Bool {
+        if verdict.isCode { return !residualProse }
+        return verdict.totalChars >= minProseCharacters
     }
 
     /// Records one field's verdict. Returns true when this makes the app learned.
     @discardableResult
-    public mutating func note(_ bundleID: String, verdict: CodeDetector.Verdict) -> Bool {
-        guard Self.isEvidence(verdict) else { return false }
+    public mutating func note(_ bundleID: String, verdict: CodeDetector.Verdict, residualProse: Bool = false) -> Bool {
+        guard Self.isEvidence(verdict, residualProse: residualProse) else { return false }
         let was = isLearned(bundleID)
         if verdict.isCode {
             codeFields[bundleID] = min(Self.cap, (codeFields[bundleID] ?? 0) + 1)

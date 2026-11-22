@@ -37,7 +37,9 @@ if CommandLine.arguments.contains("--language") {
     exit(0)
 }
 // `--code`: stdin one JSON object per line {"text"}; stdout {"code": bool, "codeChars", "totalChars", "codeLines",
-// "lines"} (`CodeDetector.verdict`: the automatic check skips a field that looks like code). For eval/code_report.py.
+// "lines", "strongLines", "residual": bool, "skip": bool, "blocks": [[location, length], …]} (`CodeDetector.scan`:
+// the verdict and residual prose as the app's main thread sees them (10k cap); `blocks` from the whole text, as the
+// check pipeline protects them; `skip` is `skipsAutomaticCheck` with protection on). For eval/code_report.py.
 if CommandLine.arguments.contains("--code") {
     while let line = readLine(strippingNewline: true) {
         guard !line.isEmpty,
@@ -47,9 +49,13 @@ if CommandLine.arguments.contains("--code") {
             FileHandle.standardError.write(Data("bad line: \(line.prefix(80))\n".utf8))
             exit(1)
         }
-        let v = CodeDetector.verdict(text)
+        let scan = CodeDetector.scan(text)
+        let v = scan.verdict
         let out: [String: Any] = ["code": v.isCode, "codeChars": v.codeChars, "totalChars": v.totalChars,
-                                  "codeLines": v.codeLines, "lines": v.lines, "strongLines": v.strongLines]
+                                  "codeLines": v.codeLines, "lines": v.lines, "strongLines": v.strongLines,
+                                  "residual": scan.hasResidualProse,
+                                  "skip": CodeDetector.skipsAutomaticCheck(scan, protectTokens: true),
+                                  "blocks": CodeDetector.blocks(in: text).map { [$0.location, $0.length] }]
         FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: out) + Data("\n".utf8))
     }
     exit(0)
@@ -82,7 +88,8 @@ if CommandLine.arguments.contains("--rewrite") {
 // `--false-fixes`: replays eval/false_fixes.jsonl through `CheckPipeline` with a recorded-reply model.
 // stdin one case per line: {"id", "options"?: {"variant", "level", "casual", "protect"}, and either
 //   "input", "output", "expected" (one check of one paragraph), or
-//   "steps": [{"text", "replies": {sent text: reply}, "expected", "typing"?: bool, "cursor"?: Int}]
+//   "steps": [{"text", "replies": {sent text: reply}, "expected", "typing"?: bool, "cursor"?: Int,
+//   "notSent"?: [substrings no text sent to the model may contain]}]
 //   (checks in order on one pipeline, so the sentence cache carries over, as while typing)}.
 // A sent text with no recorded reply comes back unchanged. The cursor defaults to the end of the text.
 // stdout one line per step: {"id", "step", "ok", "got", "expected", "sent": [texts sent to the model]}.
@@ -125,8 +132,10 @@ if CommandLine.arguments.contains("--false-fixes") {
             let cursor = step["cursor"] as? Int ?? (text as NSString).length
             let scope = CheckPipeline.Scope(cursor: cursor, maxLength: .max, typing: step["typing"] as? Bool ?? false)
             let got = Diff.apply(try await pipe.check(text, scope: scope).edits, to: text)
-            let out: [String: Any] = ["id": id, "step": i, "ok": got == expected, "got": got, "expected": expected,
-                                      "sent": model.lock.withLock { model.sent }]
+            let sent = model.lock.withLock { model.sent }
+            let leaked = (step["notSent"] as? [String] ?? []).filter { part in sent.contains { $0.contains(part) } }
+            let out: [String: Any] = ["id": id, "step": i, "ok": got == expected && leaked.isEmpty, "got": got,
+                                      "expected": expected, "sent": sent, "leaked": leaked]
             FileHandle.standardOutput.write(try JSONSerialization.data(withJSONObject: out) + Data("\n".utf8))
         }
     }
