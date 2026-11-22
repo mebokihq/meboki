@@ -3,8 +3,11 @@
 # Usage: Scripts/release.sh <version> <build> [--notes notes.html] [--publish]
 #   <version>    CFBundleShortVersionString, for example 1.0.0
 #   <build>      CFBundleVersion, a whole number that grows with every release (Sparkle compares it)
-#   --notes      an HTML fragment shown in the update window (default: one line with the version)
+#   --notes      an HTML fragment shown in the update window (default: the version's entry in App/WhatsNew/whatsnew.json)
 #   --publish    tag v<version>, push the tag and create the GitHub release with the DMG and appcast.xml
+#
+# App/WhatsNew/whatsnew.json must have an entry for <version> at the top, with text that differs from the last
+# release (Scripts/check-whats-new.py); write it by hand from the commits before releasing.
 #
 # Needs, on this Mac:
 #   - a "Developer ID Application" identity in the login keychain (make-app.sh picks it up)
@@ -40,6 +43,7 @@ cd "$ROOT"
 step() { printf '\n== %s\n' "$*"; }
 
 step "Checks"
+/usr/bin/python3 "$ROOT/Scripts/check-whats-new.py" "$VERSION" || { echo "Write what changed in $VERSION first."; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "The working tree has changes; commit them first."; exit 1; }
 IDENTITY="$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"$/\1/p' | head -1)"
 [ -n "$IDENTITY" ] || { echo "No Developer ID Application identity in the keychain."; exit 1; }
@@ -91,7 +95,11 @@ spctl -a -t exec -v "$APP"
 step "Appcast"
 SIGNATURE="$("$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" "$DMG")"   # sparkle:edSignature="…" length="…"
 URL="https://github.com/$REPO/releases/download/v$VERSION/Meboki-$VERSION.dmg"
-if [ -n "$NOTES" ]; then DESCRIPTION="$(cat "$NOTES")"; else DESCRIPTION="<p>Meboki $VERSION</p>"; fi
+if [ -z "$NOTES" ]; then
+  NOTES="$OUT/notes.html"
+  /usr/bin/python3 "$ROOT/Scripts/check-whats-new.py" "$VERSION" --html "$NOTES" >/dev/null
+fi
+DESCRIPTION="$(cat "$NOTES")"
 MIN_OS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
 PUBDATE="$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')"
 cat > "$OUT/appcast.xml" <<EOF

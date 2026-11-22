@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import MebokiCore
 
 /// Keeps the review keys away from the target app while fixes are being written (Optimization A).
 ///
@@ -21,11 +22,13 @@ final class KeyGuard: @unchecked Sendable {
     static let shared = KeyGuard()
 
     /// How long ⏎ stays blocked after an apply ends: a double press lands just after a fast apply.
-    static let returnTail: TimeInterval = 0.5
+    static let returnTail = KeyGuardPolicy.returnTail
 
     private let lock = NSLock()
-    private var active = false
-    private var returnUntil = Date.distantPast
+    /// Whether keys are held and when a stuck guard gives up (`KeyGuardPolicy`, unit-tested).
+    private var policy = KeyGuardPolicy()
+    private var active: Bool { policy.active }
+    private var watchdog: DispatchSourceTimer?
     private var stop = false
     /// Key codes whose key-down was dropped: their key-up is dropped too.
     private var held = Set<Int64>()
@@ -47,14 +50,28 @@ final class KeyGuard: @unchecked Sendable {
     /// Starts dropping the review keys. Call before the first write.
     func begin() {
         lock.withLock {
-            active = true
+            policy.begin(at: Date())
             stop = false
             swallowed = 0
             // A key-up lost while the tap was off must not make the guard drop a later one.
             held.removeAll()
         }
+        Log.write("key guard: begin")
         startTap()
+        startWatchdog()
     }
+
+    /// Runs `body` with the guard on; the guard ends however `body` leaves (`defer`), so a begin is never left open.
+    func holding<T>(tail: Bool = false, _ body: () -> T) -> T {
+        begin()
+        defer { end(tail: tail) }
+        return body()
+    }
+
+    var isOn: Bool { lock.withLock { policy.active } }
+
+    /// A write is going on: the apply is alive, so the watchdog leaves the guard alone.
+    func touch() { lock.withLock { policy.touch(at: Date()) } }
 
     /// Stops dropping keys. `tail`: ⏎ stays dropped for `returnTail` (Apply all closed the popup, so a second ⏎
     /// would reach the app). Not after a single fix: the island or card may still be up for the next ⇧⏎.
@@ -62,10 +79,10 @@ final class KeyGuard: @unchecked Sendable {
     @discardableResult
     func end(tail: Bool = false) -> Int {
         let count = lock.withLock { () -> Int in
-            active = false
-            if tail { returnUntil = Date().addingTimeInterval(Self.returnTail) }
+            policy.end(tail: tail, at: Date())
             return swallowed
         }
+        Log.write("key guard: end\(tail ? " (⏎ held \(Self.returnTail) s more)" : ""), \(count) key press(es) held")
         if tail {
             // A bit past the tail, so the check below finds it over.
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.returnTail + 0.05) { [weak self] in
@@ -78,25 +95,69 @@ final class KeyGuard: @unchecked Sendable {
     }
 
     /// Whether the tap must stay enabled: the guard is on, or ⏎ is still in its tail.
-    private var needed: Bool { lock.withLock { active || Date() < returnUntil } }
+    private var needed: Bool { lock.withLock { policy.holdsKeys(at: Date()) } }
 
     /// Turns the tap off when the guard has nothing left to hold (a `begin` since then keeps it on).
     private func disableTapIfIdle() {
         lock.withLock {
-            if !active, Date() >= returnUntil, let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+            if !policy.holdsKeys(at: Date()), let tap {
+                CGEvent.tapEnable(tap: tap, enable: false)
+                held.removeAll()
+                watchdog?.cancel()
+                watchdog = nil
+                Log.write("key guard: tap off")
+            }
         }
+    }
+
+    /// Hard stop for a guard that was never ended (a code path that returned between `begin` and `end`): checked
+    /// twice a second, and also by the tap itself on every key. Releases the keys, turns the tap off and logs it.
+    private func startWatchdog() {
+        lock.withLock {
+            guard watchdog == nil else { return }
+            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInteractive))
+            timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
+            timer.setEventHandler { [weak self] in self?.checkStuck() }
+            watchdog = timer
+            timer.resume()
+        }
+    }
+
+    /// Releases a stuck guard. True when it was stuck.
+    @discardableResult
+    private func checkStuck() -> Bool {
+        let stuck = lock.withLock { () -> TimeInterval? in
+            guard let seconds = policy.stuckFor(at: Date()) else { return nil }
+            policy.release()
+            held.removeAll()
+            stop = false
+            if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
+            watchdog?.cancel()
+            watchdog = nil
+            return seconds
+        }
+        guard let stuck else { return false }
+        Log.write(String(format: "key guard: released after %.0f s (stuck)", stuck))
+        // Whether the main thread was blocked (a write that never returns) or free (an end that never came).
+        let sent = Date()
+        DispatchQueue.main.async {
+            Log.write(String(format: "key guard: main thread ran again %.1f s after the release", Date().timeIntervalSince(sent)))
+        }
+        return true
     }
 
     /// The tap's decision for one event. Called on the tap thread.
     private func shouldDrop(_ type: CGEventType, code: Int64, flags: CGEventFlags) -> Bool {
-        lock.withLock {
+        // A stuck guard lets this event through, and every later one.
+        if checkStuck() { return false }
+        return lock.withLock {
             if type == .keyUp {
                 return held.remove(code) != nil
             }
             let shortcut = !flags.intersection(Self.shortcutFlags).isEmpty
             let drop: Bool
             if Self.returnKeys.contains(code) {
-                drop = active || Date() < returnUntil
+                drop = policy.holdsKeys(at: Date())
             } else if shortcut {
                 // A shortcut reaches the app; Esc with a modifier still stops Apply all.
                 drop = false
@@ -125,7 +186,10 @@ final class KeyGuard: @unchecked Sendable {
             return (tap, !tried)
         }
         guard first else {
-            if let existing { CGEvent.tapEnable(tap: existing, enable: true) }
+            if let existing {
+                CGEvent.tapEnable(tap: existing, enable: true)
+                Log.write("key guard: tap on")
+            }
             return
         }
         let ready = DispatchSemaphore(value: 0)
@@ -158,7 +222,8 @@ final class KeyGuard: @unchecked Sendable {
             // goes on only while the guard still needs it. Under the lock, like `disableTapIfIdle`.
             self.lock.withLock {
                 self.tap = port
-                CGEvent.tapEnable(tap: port, enable: self.active || Date() < self.returnUntil)
+                CGEvent.tapEnable(tap: port, enable: self.policy.holdsKeys(at: Date()))
+                Log.write("key guard: tap created")
             }
             ready.signal()
             CFRunLoopRun()

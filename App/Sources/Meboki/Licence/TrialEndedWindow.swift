@@ -107,8 +107,8 @@ struct TrialEndedView: View {
 }
 
 /// A hosting view that takes the first click even when Meboki isn't the active app: the window is shown
-/// without activating, so its buttons must work on the first click.
-private final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
+/// without activating, so its buttons must work on the first click. Also used by the What's new window.
+final class FirstClickHostingView<Content: View>: NSHostingView<Content> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 

@@ -280,6 +280,7 @@ final class BubblePanel {
     }
 
     var isVisible: Bool { panel.isVisible }
+    var isKey: Bool { panel.isKeyWindow }
     var windowNumber: Int { panel.windowNumber }
     var frame: CGRect { panel.frame }
 

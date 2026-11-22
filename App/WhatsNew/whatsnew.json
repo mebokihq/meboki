@@ -1,0 +1,33 @@
+[
+  {
+    "version": "1.0.6",
+    "date": "2026-11-20",
+    "highlights": [
+      {
+        "kind": "new",
+        "symbol": "doc.text.magnifyingglass",
+        "title": "A switch for logs",
+        "body": "Settings › Privacy › Logs turns logging on or off. Logs are now off by default, and so are text snippets in them."
+      }
+    ],
+    "items": [
+      { "kind": "improved", "text": "Show Meboki Log opens the logs folder when there is no log yet." }
+    ]
+  },
+  {
+    "version": "1.0.5",
+    "date": "2026-11-20",
+    "highlights": [
+      {
+        "kind": "new",
+        "symbol": "message",
+        "title": "Messages and Reminders are checked as you type",
+        "body": "Underlines now show up in the Messages text box and in Reminders titles and notes, without pressing the shortcut."
+      }
+    ],
+    "items": [
+      { "kind": "fixed", "text": "LibreOffice: underlines and the card sit in the right place on a Mac with several displays." },
+      { "kind": "fixed", "text": "Firefox and Thunderbird: fixes are pasted, so they always land on the right words." }
+    ]
+  }
+]

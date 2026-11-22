@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Carbon
+import MebokiCore
 
 /// Snapshot of the focused text field.
 struct FieldSnapshot {
@@ -381,10 +382,10 @@ enum AX {
 
     /// Polls `isFocused` until it holds or `timeout` passes. After our key panel hides, focus goes back to the
     /// target app's window a moment later (Electron reports no focused field while its window isn't key).
-    static func waitForFocus(_ el: AXUIElement, pid: pid_t, timeout: TimeInterval) -> Bool {
+    static func waitForFocus(_ el: AXUIElement, pid: pid_t, timeout: TimeInterval, orHolders holders: [AXUIElement] = []) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if isFocused(el, pid: pid) { return true }
+            if isFocused(el, pid: pid) || holders.contains(where: { isFocused($0, pid: pid) }) { return true }
             Thread.sleep(forTimeInterval: 0.01)
         } while Date() < deadline
         return false
@@ -411,9 +412,13 @@ enum AX {
     /// `pasteOnly` skips the Accessibility write (and its 1 s wait) when an earlier fix in this session already
     /// needed the paste fallback; the paste path keeps all of its checks. An editable web area (Mail compose)
     /// always pastes: it has no `AXSelectedText` to set, and its range is selected through text markers.
+    /// `focusHolders`: elements whose focus also counts as the field's (a block editor's page-wide root, which the
+    /// app reports as focused while its window isn't key, wherever the selection is); the range is selected again
+    /// and proven before any key goes out, so the paste can only land where the proven selection is.
     static func replace(in el: AXUIElement, pid: pid_t, range: NSRange, original: String, replacement: String,
                         pasteOnly: Bool = false, beforeKeystroke: () -> Void = {},
-                        normalize: @escaping (String) -> String = { $0 }) -> Bool {
+                        normalize: @escaping (String) -> String = { $0 },
+                        focusHolders: [AXUIElement] = [], onUntouched: () -> Void = {}) -> Bool {
         // What the field holds, as the caller compares it (`normalize`: a surface whose app swaps equivalent
         // characters by itself; the identity for every other field).
         let read = { text(el).map(normalize) }
@@ -428,10 +433,12 @@ enum AX {
             Log.write("\(tag): field no longer has the original text there: \(Log.snippet(before, around: range))")
             return false
         }
-        let prefix = bns.substring(to: range.location) + replacement
+        // Quotes compared folded: apps that curl a pasted quote (Slack: "doesn't" → "doesn’t") wrote the fix all the
+        // same. One UTF-16 unit either way, so the prefix still ends where the replacement does.
+        let prefix = QuoteFolding.fold(bns.substring(to: range.location) + replacement)
         let applied: (String?) -> Bool = { v in
             guard let v, v != before else { return false }
-            return v.hasPrefix(prefix)
+            return QuoteFolding.fold(v).hasPrefix(prefix)
         }
 
         var written = false
@@ -461,12 +468,14 @@ enum AX {
             Log.write("\(tag): write=\(written), field unchanged but its app isn't in front; no paste fallback")
             return false
         }
-        guard waitForFocus(el, pid: pid, timeout: 0.5) else {
+        guard waitForFocus(el, pid: pid, timeout: 0.5, orHolders: focusHolders) else {
             Log.write("\(tag): write=\(written), field unchanged and no longer focused (\(focusDescription(pid: pid))); no paste fallback")
+            onUntouched()
             return false
         }
         guard select(el, range, in: raw) else {
             Log.write("\(tag): write=\(written), field unchanged, and can't select the range for the paste fallback")
+            onUntouched()
             return false
         }
         if replacement.isEmpty {
@@ -546,8 +555,13 @@ enum Log {
         return dir.appendingPathComponent("meboki.log")
     }()
 
+    private static let writeLock = NSLock()
+
     static func write(_ line: String) {
         guard enabled else { return }
+        // Several threads log (the key guard's watchdog and tap threads): one writer at a time, or lines overwrite each other.
+        writeLock.lock()
+        defer { writeLock.unlock() }
         let stamp = ISO8601DateFormatter().string(from: Date())
         let data = Data("\(stamp) \(line)\n".utf8)
         if let fh = try? FileHandle(forWritingTo: url) {

@@ -232,20 +232,10 @@ extension AX {
               CFGetTypeID(firstWhole) == AXTextMarkerRangeGetTypeID() else { return nil }
         let origin = AXTextMarkerRangeCopyStartMarker(firstWhole as! AXTextMarkerRange)
         let range = sel as! AXTextMarkerRange
-        // A count that ends exactly at a leaf's end is also the next leaf's start: a start (or a caret) goes to
-        // the next leaf, so a caret at the start of a paragraph isn't put at the end of the one before.
         func valueOffset(_ m: AXTextMarker, atStart: Bool) -> Int? {
             guard let s = param(el, "AXStringForTextMarkerRange", AXTextMarkerRangeCreate(nil, origin, m)) as? String
             else { return nil }
-            var n = (s as NSString).length
-            let segs = leaves.map.segments
-            for (i, seg) in segs.enumerated() {
-                if n < seg.range.length || (n == seg.range.length && !(atStart && i + 1 < segs.count)) {
-                    return seg.range.location + n
-                }
-                n -= seg.range.length
-            }
-            return nil
+            return leaves.map.valueIndex(leafCount: (s as NSString).length, atStart: atStart)
         }
         let start = AXTextMarkerRangeCopyStartMarker(range), end = AXTextMarkerRangeCopyEndMarker(range)
         guard let a = valueOffset(start, atStart: true) else { return nil }

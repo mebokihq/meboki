@@ -310,8 +310,9 @@ public struct FixList: Equatable, Sendable {
     ///
     /// A text diff over the whole document can't do this: repeated text lines up with the wrong paragraph, and a
     /// fix would follow it there. Here a fix stays with its paragraph: an edit inside a paragraph that stayed is
-    /// one `textEdited` change in that paragraph; a fix in a paragraph that left goes. Nil, changing nothing,
-    /// when `old` isn't `text` or the paragraphs that stayed changed their order.
+    /// one `textEdited` change in that paragraph; a fix in a paragraph that left goes (or is parked, see
+    /// `parksDeparted`). Nil, changing nothing, when `old` isn't `text` or the paragraphs that stayed changed
+    /// their order.
     @discardableResult
     public mutating func followParagraphs(from old: SegmentMap, ids oldIDs: [Int], to new: SegmentMap,
                                           ids newIDs: [Int]) -> [Int: Int]? {
@@ -338,11 +339,92 @@ public struct FixList: Equatable, Sendable {
         // Paragraphs that came or went: each fix moves with its paragraph, or leaves with it.
         var target: [Int: Int] = [:]
         for p in pairs { target[p.o] = p.n }
+        if parksDeparted { park(departedFrom: working, staying: target) }
         then(relocate(to: new.text) { r in
             guard let (o, local) = working.local(r), let n = target[o] else { return nil }
             return new.documentRange(segment: n, local)
         })
+        if !parked.isEmpty { then(adoptParked(in: new)) }
         return remap
+    }
+
+    // MARK: - Fixes of paragraphs that left the screen
+
+    /// The pending fixes of a paragraph that left the screen, kept for when it comes back (ranges local to it).
+    struct ParkedParagraph: Equatable, Sendable {
+        var text: String
+        var fixes: [Fix]
+    }
+
+    /// While true, `followParagraphs` keeps the pending fixes of paragraphs that left (instead of dropping them)
+    /// and puts them back when a paragraph with exactly the same text, and no other, is in the document again.
+    /// For Apply all in an app that lists only the paragraphs near the screen and scrolls to each write (Notion):
+    /// a paragraph that leaves and returns is a new element, so identity can't bring its fixes back, but its text
+    /// can, as long as no other paragraph has it at the time it is parked and when it returns. Paragraphs that
+    /// were never in the window rendered then aren't known, so a later paragraph with the same text could still
+    /// take the fixes: the write itself is what stops a wrong one (it checks the original words at the range).
+    public var parksDeparted = false
+    private(set) var parked: [ParkedParagraph] = []
+    /// Pending fixes waiting for their paragraph to come back.
+    public var parkedCount: Int { parked.reduce(0) { $0 + $1.fixes.count } }
+
+    /// Forgets the parked fixes and stops parking.
+    public mutating func dropParked() {
+        parked = []
+        parksDeparted = false
+    }
+
+    private mutating func park(departedFrom doc: SegmentMap, staying target: [Int: Int]) {
+        var groups: [Int: [Fix]] = [:]
+        for f in fixes where f.status == .pending {
+            guard let (o, local) = doc.local(f.edit.range), target[o] == nil else { continue }
+            var fix = f
+            fix.edit.range = local
+            groups[o, default: []].append(fix)
+        }
+        for (o, fs) in groups.sorted(by: { $0.key < $1.key }) {
+            let text = doc.segments[o]
+            // Only a paragraph that is the only one with this text (in the document it left, and among the parked
+            // ones) can be told apart when it returns.
+            let sameInDocument = doc.segments.lazy.filter { $0 == text }.count
+            let clash = parked.contains { $0.text == text }
+            if clash { parked.removeAll { $0.text == text } }
+            guard sameInDocument == 1, !clash, text.rangeOfCharacter(from: .letters) != nil else { continue }
+            parked.append(ParkedParagraph(text: text, fixes: fs))
+        }
+    }
+
+    /// Puts parked fixes into the paragraphs of `new` that hold exactly their text (once). Returns where each fix
+    /// of the list went (old index → new index).
+    private mutating func adoptParked(in new: SegmentMap) -> [Int: Int] {
+        var added: [Fix] = []
+        parked.removeAll { p in
+            let at = new.segments.indices.filter { new.segments[$0] == p.text }
+            guard at.count == 1 else { return false }
+            let ns = new.text as NSString
+            for var f in p.fixes {
+                f.edit.range.location += new.ranges[at[0]].location
+                guard NSMaxRange(f.edit.range) <= ns.length, ns.substring(with: f.edit.range) == f.edit.original else { continue }
+                added.append(f)
+            }
+            return true
+        }
+        guard !added.isEmpty else { return Dictionary(uniqueKeysWithValues: fixes.indices.map { ($0, $0) }) }
+        var step: [Int: Int] = [:]
+        var merged: [Fix] = []
+        var pending = added.sorted { $0.edit.range.location < $1.edit.range.location }[...]
+        for (i, f) in fixes.enumerated() {
+            while let a = pending.first, a.edit.range.location < f.edit.range.location {
+                merged.append(a)
+                pending = pending.dropFirst()
+            }
+            step[i] = merged.count
+            merged.append(f)
+        }
+        merged.append(contentsOf: pending)
+        fixes = merged
+        if let c = current { current = step[c] } else { current = merged.firstIndex { $0.status == .pending } }
+        return step
     }
 
     /// The first pending fix at or after `location`, else the last pending fix, else nil.

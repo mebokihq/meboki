@@ -54,6 +54,26 @@ import Testing
         #expect(TextWindow.alignment(old: old, new: new) == nil)
     }
 
+    /// Seen 2026-11-22: right after a paste Docs added one short paragraph at the top of its window (1069 → 1106);
+    /// a small change describes it, yet it is a shift of whole paragraphs, and the write's check must see it so.
+    @Test func shortParagraphAddedAtAnEdgeAlignsWhenAsked() {
+        let old = Self.paras(2...10)
+        let new = "Short one.\n" + old
+        #expect(TextWindow.alignment(old: old, new: new) == nil)
+        let a = TextWindow.alignment(old: old, new: new, evenWhenSmall: true)
+        #expect(a?.shift == -("Short one.\n" as NSString).length)
+        #expect(a?.edit == nil)
+        #expect(a?.overlap == NSRange(location: 0, length: (old as NSString).length))
+    }
+
+    @Test func smallEditStaysAnEditWhenAsked() {
+        let old = Self.paras(1...10)
+        let new = old.replacingOccurrences(of: "Paragraph 3 of", with: "Paragraph 3 off")
+        let a = TextWindow.alignment(old: old, new: new, evenWhenSmall: true)
+        #expect(a?.shift == 0)
+        #expect(a?.edit != nil)
+    }
+
     @Test func unrelatedTextsDontAlign() {
         #expect(TextWindow.alignment(old: Self.paras(1...10), new: Self.paras(40...50)) == nil)
     }

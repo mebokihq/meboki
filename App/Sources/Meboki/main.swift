@@ -45,6 +45,13 @@ MainActor.assumeIsolated {
         app.run()
         return
     }
+    // `.build/debug/Meboki --whats-new-demo [--from <version>|--from-none] [--current <version>] [--dark]`:
+    // the What's new window with the shipped content.
+    if CommandLine.arguments.contains("--whats-new-demo") {
+        WhatsNewDemo.show(CommandLine.arguments)
+        app.run()
+        return
+    }
     // `.build/debug/Meboki --popover-demo [--licence-state …] [--dark]`: the menu-bar popover under a fake icon.
     if CommandLine.arguments.contains("--popover-demo") {
         PopoverDemo.show(licenceState: LicenceDemo.state(from: CommandLine.arguments),

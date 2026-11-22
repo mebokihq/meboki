@@ -9,14 +9,31 @@ import Foundation
 /// leaves up with the value, so a field range can be split into leaf-local ranges.
 ///
 /// Matching is strict: a leaf goes where its exact text follows the previous leaf, after a gap of only
-/// whitespace, newlines and object replacement characters. A leaf that doesn't match is left out (its text
-/// gets no bounds); the next leaf may skip over the text the unmatched one would have covered.
+/// whitespace, newlines and object replacement characters. A leaf whose exact text isn't there may match
+/// without its leading and trailing whitespace: x.com's list items are one leaf "    • First item", while the
+/// value has "…before.    \n• First item" (the indent lands before the line break; probed 2026-11-22). Such a
+/// segment covers the trimmed text and keeps where it starts in the leaf (`offset`), since the leaf's own
+/// ranges count the indent. A leaf that doesn't match is left out (its text gets no bounds); the next leaf may
+/// skip over the text the unmatched one would have covered.
 public struct TextLeafMap: Equatable, Sendable {
     public struct Segment: Equatable, Sendable {
         /// Index into the leaves the map was built from.
         public let leaf: Int
         /// Where the leaf's text sits in the value.
         public let range: NSRange
+        /// Where `range` starts in the leaf's own text (UTF-16): 0, or the leading whitespace a trimmed match
+        /// left out.
+        public var offset: Int
+        /// UTF-16 length of the leaf's whole text: `offset + range.length`, plus any trailing whitespace a
+        /// trimmed match left out.
+        public var leafLength: Int
+
+        public init(leaf: Int, range: NSRange, offset: Int = 0, leafLength: Int? = nil) {
+            self.leaf = leaf
+            self.range = range
+            self.offset = offset
+            self.leafLength = leafLength ?? offset + range.length
+        }
     }
 
     /// Matched leaves, in value order, never overlapping.
@@ -40,12 +57,25 @@ public struct TextLeafMap: Equatable, Sendable {
             let t = leaf as NSString
             guard t.length > 0, cursor < ns.length else { continue }
             let end = min(ns.length, cursor + maxGap + unmatched + t.length)
-            let found = ns.range(of: leaf, options: .literal, range: NSRange(location: cursor, length: end - cursor))
-            if found.location != NSNotFound,
-               Self.gapOK(ns.substring(with: NSRange(location: cursor, length: found.location - cursor)),
-                          allowed: unmatched) {
-                segments.append(Segment(leaf: i, range: found))
-                cursor = NSMaxRange(found)
+            func find(_ text: String) -> NSRange? {
+                let found = ns.range(of: text, options: .literal, range: NSRange(location: cursor, length: end - cursor))
+                guard found.location != NSNotFound,
+                      Self.gapOK(ns.substring(with: NSRange(location: cursor, length: found.location - cursor)),
+                                 allowed: unmatched) else { return nil }
+                return found
+            }
+            var match: (range: NSRange, offset: Int)?
+            if let found = find(leaf) {
+                match = (found, 0)
+            } else {
+                let trimmed = leaf.trimmingCharacters(in: .whitespaces) as NSString
+                if trimmed.length > 0, trimmed.length < t.length, let found = find(trimmed as String) {
+                    match = (found, t.range(of: trimmed as String, options: .literal).location)
+                }
+            }
+            if let match {
+                segments.append(Segment(leaf: i, range: match.range, offset: match.offset, leafLength: t.length))
+                cursor = NSMaxRange(match.range)
                 unmatched = 0
             } else {
                 unmatched += t.length
@@ -74,10 +104,12 @@ public struct TextLeafMap: Equatable, Sendable {
         // An edit that empties the leaf leaves nothing to anchor on.
         guard s.length + change.delta > 0 else { return nil }
         var out = segments
-        out[k] = Segment(leaf: out[k].leaf, range: NSRange(location: s.location, length: s.length + change.delta))
+        out[k] = Segment(leaf: out[k].leaf, range: NSRange(location: s.location, length: s.length + change.delta),
+                         offset: out[k].offset, leafLength: out[k].leafLength + change.delta)
         for i in (k + 1)..<out.count {
             out[i] = Segment(leaf: out[i].leaf, range: NSRange(location: out[i].range.location + change.delta,
-                                                               length: out[i].range.length))
+                                                               length: out[i].range.length),
+                             offset: out[i].offset, leafLength: out[i].leafLength)
         }
         return (TextLeafMap(segments: out, length: length + change.delta), segments[k].leaf)
     }
@@ -108,7 +140,8 @@ public struct TextLeafMap: Equatable, Sendable {
             let s = segments[i]
             let overlap = NSIntersectionRange(s.range, range)
             if overlap.length > 0 {
-                out.append((s.leaf, NSRange(location: overlap.location - s.range.location, length: overlap.length)))
+                out.append((s.leaf, NSRange(location: overlap.location - s.range.location + s.offset,
+                                            length: overlap.length)))
             }
             i += 1
         }
@@ -130,7 +163,23 @@ public struct TextLeafMap: Equatable, Sendable {
         guard lo < segments.count else { return nil }
         let s = segments[lo]
         guard s.range.location <= index, index <= NSMaxRange(s.range) else { return nil }
-        return (s.leaf, index - s.range.location)
+        return (s.leaf, index - s.range.location + s.offset)
+    }
+
+    /// The value index of a count of `n` UTF-16 units of leaf text from the first leaf's start, every leaf's
+    /// whole text counted (Chrome's marker text): a count inside a leaf's left-out whitespace goes to the nearest
+    /// end of its matched text. A count that ends exactly at a leaf's end is also the next leaf's start:
+    /// `atStart` takes the next leaf, so a caret at the start of a paragraph isn't put at the end of the one
+    /// before. Nil past the last leaf.
+    public func valueIndex(leafCount n: Int, atStart: Bool) -> Int? {
+        var n = n
+        for (i, seg) in segments.enumerated() {
+            if n < seg.leafLength || (n == seg.leafLength && !(atStart && i + 1 < segments.count)) {
+                return seg.range.location + min(max(n - seg.offset, 0), seg.range.length)
+            }
+            n -= seg.leafLength
+        }
+        return nil
     }
 
     /// Share of the value's non-whitespace characters that some leaf covers (1 when the value is blank).

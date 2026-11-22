@@ -98,6 +98,12 @@ enum FieldProbe {
     /// several fields its paragraph count, length, caret and the bounds of `words` in the whole document.
     /// `--surface-replace word replacement` writes through the surface (`TextSurface.replace`): test documents only.
     private static func probeSurface(_ el: AXUIElement, pid: pid_t, words: [String], replace: (String, String)?) {
+        // What the block-editor strategy costs for this field, cold and then with its remembered "no".
+        for pass in ["cold", "again"] {
+            let tn = Date()
+            let hit = NestedBlocksStrategy().surface(for: el, pid: pid) != nil
+            print("nested blocks (\(pass)): \(hit ? "match" : "no match")" + String(format: ", %.1f ms", Date().timeIntervalSince(tn) * 1000))
+        }
         let t0 = Date()
         let surface = SurfaceResolver.surface(for: el, pid: pid)
         let kind = SurfaceResolver.strategies.first { $0.surface(for: el, pid: pid) != nil }?.name ?? "single field"

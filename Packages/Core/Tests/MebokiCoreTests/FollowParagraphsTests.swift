@@ -103,4 +103,72 @@ import Testing
         #expect(list.fixes[0].edit.range.location == 6)
         #expect(list.text == new.text)
     }
+
+    // MARK: - Parked fixes (parksDeparted)
+
+    @Test func parkedFixesComeBackWithTheirParagraphByExactText() {
+        let old = SegmentMap(segments: ["A have one.", "B have two.", "C have three."])
+        var list = FixList(text: old.text, edits: [
+            Self.edit(old.text, "have", "has"),
+            Self.edit(old.text, "have", "has", after: 12),
+            Self.edit(old.text, "have", "has", after: 24),
+        ])
+        list.parksDeparted = true
+        // A leaves, D comes.
+        let mid = SegmentMap(segments: ["B have two.", "C have three.", "D here."])
+        #expect(list.followParagraphs(from: old, ids: [1, 2, 3], to: mid, ids: [2, 3, 4]) != nil)
+        #expect(list.fixes.count == 2)
+        #expect(list.parkedCount == 1)
+        // A returns as a new element, B leaves.
+        let back = SegmentMap(segments: ["A have one.", "C have three.", "D here."])
+        let remap = list.followParagraphs(from: mid, ids: [2, 3, 4], to: back, ids: [9, 3, 4])
+        #expect(remap == [1: 1])
+        #expect(list.parkedCount == 1)  // B's fix now waits
+        #expect(list.fixes.count == 2)
+        #expect(list.text == back.text)
+        for f in list.fixes {
+            #expect((list.text as NSString).substring(with: f.edit.range) == "have")
+        }
+        #expect(list.fixes[0].edit.range.location == 2)  // A's "have"
+        #expect(list.pendingCount == 2)
+    }
+
+    @Test func repeatedTextIsNotMatchedAndNothingIsParkedForIt() {
+        let old = SegmentMap(segments: ["Same have text.", "X have y.", "Same have text."])
+        var list = FixList(text: old.text, edits: [
+            Self.edit(old.text, "have", "has"),
+            Self.edit(old.text, "have", "has", after: 16),
+        ])
+        list.parksDeparted = true
+        // Both "Same" paragraphs leave, then one comes back: it is not either one of them for certain.
+        let mid = SegmentMap(segments: ["X have y."])
+        _ = list.followParagraphs(from: old, ids: [1, 2, 3], to: mid, ids: [2])
+        #expect(list.parkedCount == 0)
+        #expect(list.fixes.count == 1)
+        let back = SegmentMap(segments: ["X have y.", "Same have text."])
+        _ = list.followParagraphs(from: mid, ids: [2], to: back, ids: [2, 7])
+        #expect(list.fixes.count == 1)
+    }
+
+    @Test func parkedTextThatNowAppearsTwiceStaysParked() {
+        let old = SegmentMap(segments: ["A have one.", "B have two."])
+        var list = FixList(text: old.text, edits: [Self.edit(old.text, "have", "has")])
+        list.parksDeparted = true
+        let mid = SegmentMap(segments: ["B have two."])
+        _ = list.followParagraphs(from: old, ids: [1, 2], to: mid, ids: [2])
+        #expect(list.parkedCount == 1)
+        let two = SegmentMap(segments: ["A have one.", "B have two.", "A have one."])
+        _ = list.followParagraphs(from: mid, ids: [2], to: two, ids: [8, 2, 9])
+        #expect(list.fixes.isEmpty)
+        #expect(list.parkedCount == 1)
+    }
+
+    @Test func withoutParkingFixesOfDepartedParagraphsAreDropped() {
+        let old = SegmentMap(segments: ["A have one.", "B have two."])
+        var list = FixList(text: old.text, edits: [Self.edit(old.text, "have", "has")])
+        let mid = SegmentMap(segments: ["B have two."])
+        _ = list.followParagraphs(from: old, ids: [1, 2], to: mid, ids: [2])
+        #expect(list.parkedCount == 0)
+        #expect(list.fixes.isEmpty)
+    }
 }

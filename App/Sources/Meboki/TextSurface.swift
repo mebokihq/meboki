@@ -69,10 +69,38 @@ protocol TextSurface: AnyObject {
     /// The app reports text positions a moment after it scrolls (Chromium and Electron rich editors, measured
     /// through their text leaves): underlines wait until two measurements agree.
     var settlesLate: Bool { get }
+    /// How long focus may sit on something that isn't part of the surface before it counts as left: an editor that
+    /// reports a window or a wrapper for a moment between two of its fields (Notion, on a click into another block).
+    /// Zero: the first element that isn't ours is a leave.
+    var focusGrace: TimeInterval { get }
+    /// The app lists only the paragraphs near the screen and builds a paragraph again when it scrolls back into
+    /// view (a new element with the same text, Notion): Apply all keeps the fixes of paragraphs that left, by
+    /// their text, until they return (`FixList.parksDeparted`). Off where the elements keep their identity.
+    var recreatesOffscreenParagraphs: Bool { get }
+    /// Apply all follows the document when its text changed by something one small `TextChange` describes
+    /// (`carry` answered nil: the same paragraphs, a few characters different, or one paragraph more or fewer at
+    /// an edge of the window): the list takes that change (`FixList.textEdited`, fixes it touches leave) and
+    /// Apply all goes on. Off: a nil from `carry` stops Apply all (a single field whose text moved with the scroll).
+    var followsSmallChangesInApplyAll: Bool { get }
+    /// Apply all skips a group whose write failed while the paragraph was verified untouched
+    /// (`lastWriteLeftFieldUntouched`) and goes on with the next group. Off: any failed write stops it.
+    var skipsUntouchedFailuresInApplyAll: Bool { get }
+    /// The last `replace` failed with its field proven unchanged (it can't select the range, or the field isn't
+    /// focused), so nothing was written and nothing can have landed elsewhere.
+    var lastWriteLeftFieldUntouched: Bool { get }
+    /// `edits` (relative to the checked scope, which starts at `scopeLocation` in `text`) without what the app
+    /// won't let anyone select, such as list labels (`ParagraphLabels`). The default changes nothing.
+    func writableEdits(_ edits: [Edit], in text: String, scopeLocation: Int) -> [Edit]
 }
 
 extension TextSurface {
     var unreadableError: AXError2? { nil }
+    var focusGrace: TimeInterval { 0 }
+    var recreatesOffscreenParagraphs: Bool { false }
+    var followsSmallChangesInApplyAll: Bool { false }
+    var skipsUntouchedFailuresInApplyAll: Bool { false }
+    var lastWriteLeftFieldUntouched: Bool { false }
+    func writableEdits(_ edits: [Edit], in text: String, scopeLocation: Int) -> [Edit] { edits }
 }
 
 /// One element is the whole text: every app before multi-field documents, unchanged. Each call is the
@@ -89,6 +117,13 @@ final class SingleFieldSurface: TextSurface {
     var lifeElements: [AXUIElement] { [element] }
     var placesCaretAfterReview: Bool { true }
 
+    /// List labels at a line start are left alone: Chromium rich editors put the list marker into the value
+    /// ("• First item" on x.com, probed 2026-11-22), and the model offers to drop or reword it. A typed label
+    /// keeps its fixes too: an edit that keeps the label is cut to start after it.
+    func writableEdits(_ edits: [Edit], in text: String, scopeLocation: Int) -> [Edit] {
+        ParagraphLabels.trim(edits, in: text, scopeLocation: scopeLocation)
+    }
+
     func text() -> String? { AX.text(element) }
     func selection() -> NSRange? { AX.selection(element) }
     func select(_ range: NSRange, in text: String) -> Bool { AX.select(element, range, in: text) }
@@ -104,9 +139,20 @@ final class SingleFieldSurface: TextSurface {
     /// original is still at `range` (as it always did; some apps report their value slightly differently).
     func replace(pid: pid_t, range: NSRange, original: String, replacement: String, expected: String,
                  pasteOnly: Bool, beforeKeystroke: () -> Void) -> Bool {
-        AX.replace(in: element, pid: pid, range: range, original: original, replacement: replacement,
-                   pasteOnly: pasteOnly, beforeKeystroke: beforeKeystroke)
+        lastWriteLeftFieldUntouched = false
+        var untouched = false
+        let ok = AX.replace(in: element, pid: pid, range: range, original: original, replacement: replacement,
+                            pasteOnly: pasteOnly, beforeKeystroke: beforeKeystroke,
+                            onUntouched: { untouched = true })
+        // Skippable only while the field still has focus: with focus gone every later write would fail too.
+        if !ok, untouched, AX.isFocused(element, pid: pid) { lastWriteLeftFieldUntouched = true }
+        return ok
     }
+    /// Chrome editors sometimes won't select one fix's range (Slack, 2026-11-22: "there" → "their" at the end of
+    /// a list item stopped Apply all after 34 of 45 writes). The field is proven unchanged then, so Apply all skips
+    /// that fix and goes on.
+    var skipsUntouchedFailuresInApplyAll: Bool { true }
+    private(set) var lastWriteLeftFieldUntouched = false
     /// False until the review sees the field's text change with a scroll (`learnTextFollowsScroll`): editors that
     /// keep only the lines near the screen in their field, such as Obsidian's CodeMirror.
     var textFollowsScroll: Bool { ScrollFollowingFields.contains(element) }
@@ -144,7 +190,7 @@ protocol SurfaceStrategy {
 /// element by itself (`SingleFieldSurface`), which is how every app worked before.
 enum SurfaceResolver {
     /// Tried in order.
-    static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy()]
+    static let strategies: [SurfaceStrategy] = [MirrorStrategy(), SiblingParagraphsStrategy(), NestedBlocksStrategy()]
 
     static func surface(for focused: AXUIElement, pid: pid_t) -> TextSurface {
         for s in strategies {

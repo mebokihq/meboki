@@ -1,7 +1,8 @@
+import AppKit
 import MebokiCore
 import SwiftUI
 
-/// Settings › About (design_code.md §8.7). The source isn't published yet, so "Source code" is disabled;
+/// Settings › About (design_code.md §8.7). "Source code" and the link row open the public repository;
 /// "Acknowledgements" lists the third-party parts; the line under the version shows the licence state.
 struct AboutPane: View {
     @ObservedObject var model: SettingsModel
@@ -10,6 +11,10 @@ struct AboutPane: View {
     @State private var showLicenses = false
 
     private var version: String { UpdateController.currentVersion }
+
+    /// The public source repository (GPL-3.0).
+    static let repository = URL(string: "https://github.com/mebokihq/meboki")!
+    private static func repo(_ path: String) -> URL { repository.appendingPathComponent(path) }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -24,17 +29,29 @@ struct AboutPane: View {
             .help("Open Settings › Licence")
             Text("Open source. Local models. No account.").foregroundStyle(DS.textSecondary)
             HStack(spacing: 8) {
-                Button("Source code") {}
+                Button("Source code") { NSWorkspace.shared.open(Self.repository) }
                     .buttonStyle(.dsSecondary)
-                    .disabled(true)
-                    .help("The source isn't published yet.")
+                    .help(Self.repository.absoluteString)
                 Button("Acknowledgements") { showLicenses.toggle() }
                     .buttonStyle(.dsSecondary)
                     .popover(isPresented: $showLicenses, arrowEdge: .bottom) { licenses }
                 Button("Welcome Guide") { model.actions.showWelcome() }
                     .buttonStyle(.dsSecondary)
+                Button("Changelog") { model.actions.showChangelog() }
+                    .buttonStyle(.dsSecondary)
             }
             .padding(.top, 14)
+            HStack(spacing: 6) {
+                link("github.com/mebokihq/meboki", Self.repository)
+                Text("·").foregroundStyle(DS.textTertiary)
+                link("Licence (GPL-3.0)", Self.repo("blob/master/LICENSE"))
+                Text("·").foregroundStyle(DS.textTertiary)
+                link("Releases", Self.repo("releases"))
+                Text("·").foregroundStyle(DS.textTertiary)
+                link("Report an issue", Self.repo("issues"))
+            }
+            .font(DS.Font.link)
+            .padding(.top, 2)
             // Official builds only.
             if updates.isEnabled {
                 HStack(spacing: 10) {
@@ -51,6 +68,12 @@ struct AboutPane: View {
         .font(DS.Font.body)
         .frame(maxWidth: .infinity)
         .padding(.top, 40)
+    }
+
+    private func link(_ title: String, _ url: URL) -> some View {
+        Button(title) { NSWorkspace.shared.open(url) }
+            .buttonStyle(.dsLink)
+            .help(url.absoluteString)
     }
 
     private var licenceLine: String {

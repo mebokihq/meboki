@@ -33,6 +33,10 @@ APP="${MEBOKI_APP_DIR:-$ROOT/build/Meboki.app}"
 LLAMA="$ROOT/Vendor/bin/llama-server"
 
 [ -x "$LLAMA" ] || { echo "Missing $LLAMA. Run Scripts/build-llama-server.sh first."; exit 1; }
+# The What's new text (App/WhatsNew): a broken file stops the build; with MEBOKI_VERSION, a missing or unchanged
+# entry for that version is a warning here (Scripts/release.sh makes it an error).
+/usr/bin/python3 "$ROOT/Scripts/check-whats-new.py"
+[ -z "${MEBOKI_VERSION:-}" ] || /usr/bin/python3 "$ROOT/Scripts/check-whats-new.py" "$MEBOKI_VERSION" --warn
 
 CONFIG=release
 INSTALL=0
@@ -57,6 +61,7 @@ cp "$BIN" "$APP/Contents/MacOS/Meboki"
 cp "$LLAMA" "$APP/Contents/MacOS/llama-server"
 cp "$ROOT/App/Info.plist" "$APP/Contents/Info.plist"
 cp "$ROOT/App/Art/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"   # from App/Art/AppIcon.svg (Scripts/make-art.sh)
+ditto "$ROOT/App/WhatsNew" "$APP/Contents/Resources/WhatsNew"             # the What's new window's text and images
 # The updater framework (symlinks kept). The binary looks for it next to itself in .build; in the bundle
 # it is in Contents/Frameworks.
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"

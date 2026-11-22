@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             useApple: { [weak self] in self?.useApple() },
             openAppleSettings: { AppleIntelligence.openSettings() },
             showWelcome: { [weak self] in self?.showOnboarding() },
+            showChangelog: { [weak self] in self?.showChangelog() },
             showUpdate: { [weak self] in self?.updates.showUpdate() })
         let c = SettingsWindowController(model: model, settings: settings, store: store)
         // Closing Settings gives the keyboard back to the app the user was in.
@@ -65,6 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var trustTimer: Timer?
     private let toasts = ToastPanel()
     private var noticeWindow: TrialEndedWindowController?
+    /// The What's new window (after an update, or right-click menu › What's New…).
+    private var whatsNewWindow: WhatsNewWindowController?
     private var lastDayRetryPending = false
     /// The island HUD (popup style `island`, design_code.md §5.6): checking, review, done and messages.
     private let island = IslandPanel()
@@ -73,6 +76,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var watcher: FieldWatcher?
     /// Debounced underline refresh after a scroll, move or write.
     private var relayout: DispatchWorkItem?
+    /// The pending look at focus after it left a surface that allows a grace (`focusLeft`).
+    private var focusGraceWork: DispatchWorkItem?
+    /// The same wait for the automatic check's target (`autoFocusChanged`).
+    private var autoGraceWork: DispatchWorkItem?
     /// After a scroll in a field that settles late (`TextSurface.settlesLate`): the last measured marks and how
     /// many measurements were taken, until two in a row agree (`refreshUnderlines(confirm:)`).
     private var settling: (marks: [UnderlineMark], tries: Int)?
@@ -81,6 +88,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var scrollChanges = ScrollChangeDetector()
     /// When the review last saw the field's text move with a scroll (`syncLive`): underlines wait until it rests.
     private var lastTextMove: Date?
+    /// The last `syncLive` that changed the session was a document that moved by paragraph (`carry`), not typing:
+    /// the user's fix is still pending, so an Apply that found it must go on instead of being dropped.
+    private var lastSyncCarried = false
+    private var strayKeysTimer: Timer?
     /// After a scroll moved the text: one more check once it rests, over what is on screen then (the checks during
     /// the scroll saw a visible range that was still changing).
     private var restCheckDue = false
@@ -370,6 +381,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.cancel()
             }
         }
+        // Safety net: a popup that holds the keyboard when it shouldn't gives it back (see `releaseStrayKeys`).
+        strayKeysTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.releaseStrayKeys() }
+        }
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -483,6 +498,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Settings…", action: #selector(showSettingsFromMenu), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Welcome Guide…", action: #selector(showOnboardingFromMenu), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: "What's New…", action: #selector(showWhatsNewFromMenu), keyEquivalent: ""))
         if updates.isEnabled {
             menu.addItem(NSMenuItem(title: UpdateText.checkNow, action: #selector(checkForUpdatesFromMenu), keyEquivalent: ""))
         }
@@ -554,7 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var inUse: Bool {
         isChecking || checkTask != nil || session != nil || popup.isVisible || island.isVisible || toasts.isVisible
             || popover.isVisible || noticeWindow?.isVisible == true || onboarding?.isVisible == true
-            || settingsWindow.isVisible || !settings.onboardingDone
+            || whatsNewWindow?.isVisible == true || settingsWindow.isVisible || !settings.onboardingDone
             || store.downloads.values.contains { state in
                 switch state {
                 case .downloading, .verifying: true
@@ -604,7 +620,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .sink { [weak self] _ in self?.showDueLicenceNotices() }
             .store(in: &settingsObservers)
         // At launch: once everything else is up (and after onboarding, which calls this again when it closes).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in self?.showDueLicenceNotices() }
+        // What's new after an update comes first; a licence notice waits until it is closed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.showWhatsNewIfDue()
+            self?.showDueLicenceNotices()
+        }
     }
 
     /// The entitlement changed (activation, removal, trial end, a new day, the revoked list). The running app
@@ -624,6 +644,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showDueLicenceNotices()
     }
 
+    // MARK: What's new (design_code.md §8.12)
+
+    private static let whatsNewSeenKey = "whatsNewLastVersion"
+
+    /// Once per version, at launch: the window with what changed since the version this Mac ran before. A fresh
+    /// install only records the version (the Welcome window explains the app). Decided by `WhatsNew.decide` (Core).
+    private func showWhatsNewIfDue() {
+        let current = WhatsNewContent.currentVersion
+        let defaults = UserDefaults.standard
+        let lastSeen = defaults.string(forKey: Self.whatsNewSeenKey)
+        switch WhatsNew.decide(current: current, lastSeen: lastSeen, onboardingDone: settings.onboardingDone,
+                               all: WhatsNewContent.load()) {
+        case .none:
+            return
+        case .record:
+            defaults.set(current, forKey: Self.whatsNewSeenKey)
+        case .show(let from, let releases):
+            defaults.set(current, forKey: Self.whatsNewSeenKey)
+            Log.write("whats-new: shown for \(current) (from \(from ?? "an older build"), \(releases.count) entries)")
+            showWhatsNew(from: from, releases: releases, activate: false)
+        }
+    }
+
+    /// Right-click menu › What's New…: this version's entry (the user asked, so the window may take the keyboard).
+    @objc private func showWhatsNewFromMenu() {
+        DispatchQueue.main.async {
+            let current = WhatsNewContent.currentVersion
+            let all = WhatsNewContent.load()
+            // A build whose version has no entry, or a hidden one, shows the newest entry that has text.
+            let releases = WhatsNew.releases(all, from: nil, to: current)
+            guard let shown = releases.isEmpty ? all.first(where: { !$0.isEmpty }).map({ [$0] }) : releases else {
+                self.toast(.info, "Nothing to show", detail: "This build has no release notes", symbol: "info",
+                           near: nil, duration: 4)
+                return
+            }
+            self.showWhatsNew(from: nil, releases: shown, activate: true)
+        }
+    }
+
+    /// Settings › About › Changelog: every release up to this one, newest first, in the What's new window.
+    private func showChangelog() {
+        let releases = WhatsNew.history(WhatsNewContent.load(), upTo: WhatsNewContent.currentVersion)
+        guard !releases.isEmpty else { return }
+        showWhatsNew(from: nil, releases: releases, activate: true, changelog: true)
+    }
+
+    private func showWhatsNew(from: String?, releases: [WhatsNewRelease], activate: Bool, changelog: Bool = false) {
+        // One window at a time; a different list replaces the open one.
+        if let w = whatsNewWindow, w.isVisible {
+            if w.matches(releases: releases, changelog: changelog) { w.show(activate: activate); return }
+            w.onClose = nil
+            w.close()
+        }
+        let w = WhatsNewWindowController(from: from, releases: releases, folder: WhatsNewContent.folder,
+                                         changelog: changelog)
+        // Not inside `windowWillClose`: that would drop the last reference to the window while it closes.
+        w.onClose = { [weak self] in
+            DispatchQueue.main.async {
+                self?.whatsNewWindow = nil
+                self?.showDueLicenceNotices()
+            }
+        }
+        whatsNewWindow = w
+        w.show(activate: activate)
+    }
+
     // MARK: Licence notices (PLAN.md §6 "Where the user meets the paywall")
 
     /// The one-time window notice ("Your trial has ended" / "no longer valid") and the last-day toast, whichever
@@ -631,7 +717,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// and each notice sets its flag when it is shown. Called at launch, on every entitlement change, when the
     /// trial clock changes and when onboarding closes.
     private func showDueLicenceNotices() {
-        guard noticeWindow?.isVisible != true else { return }
+        guard noticeWindow?.isVisible != true, whatsNewWindow?.isVisible != true else { return }
         let busy = !settings.onboardingDone || onboarding?.isVisible == true
         if let notice = LicenceNotices.windowNotice(entitlement: licence.entitlement, kid: licence.storedKid,
                                                     flags: settings.noticeFlags, onboardingBusy: busy) {
@@ -1641,7 +1727,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                detail: "Check it again with \(self.settings.hotkey.display)", near: nil)
                     return
                 }
-                let list = FixList(text: scopeText, edits: self.ignoredFixes.filter(result.edits, in: scopeText))
+                let usable = snap.surface.writableEdits(self.ignoredFixes.filter(result.edits, in: scopeText),
+                                                        in: snap.text, scopeLocation: scope.location)
+                let list = FixList(text: scopeText, edits: usable)
                 if result.foreignChunks > 0 {
                     Log.write("check: \(result.foreignChunks) paragraph(s) not in English, not sent")
                 }
@@ -1932,8 +2020,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         w.onFocusChanged = { [weak self] in
             guard let self, let s = self.session, !s.snapshot.surface.isFocused(pid: s.snapshot.pid) else { return }
-            Log.write("review: focus left the field; underlines cleared")
-            self.cancel()
+            self.focusLeft(s)
         }
         w.onLayoutChanged = { [weak self] in
             self?.scrollChanges.scrolled(at: Date())
@@ -1941,6 +2028,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         w.onTick = { [weak self] in self?.checkLayoutDrift() }
         watcher = w
+    }
+
+    /// Focus is on something outside the review's surface. A surface with a focus grace waits and looks again
+    /// (its app reports a window or nothing between two fields, or while Meboki's own card is key); the review ends
+    /// when focus lands on another editable field, or the grace runs out with focus still elsewhere.
+    private func focusLeft(_ s: Session) {
+        let surface = s.snapshot.surface, pid = s.snapshot.pid
+        let end = { [weak self] in
+            guard let self, let cur = self.session, cur.snapshot.pid == pid, !cur.snapshot.surface.isFocused(pid: pid)
+            else { return }
+            Log.write("review: focus left the field; underlines cleared")
+            self.cancel()
+        }
+        guard surface.focusGrace > 0 else { end(); return }
+        focusGraceWork?.cancel()
+        let work = awaitFocus(surface: surface, pid: pid, holding: { [weak self] in
+            // Meboki's own card or island is key (the app reports no focus while it is): not a leave.
+            self.map { $0.popup.isVisible || $0.session?.island == true } ?? false
+        }) { back, _ in if !back { end() } }
+        focusGraceWork = work
+    }
+
+    /// Looks at the app's focus every 0.2 s for up to `surface.focusGrace`, and reports as soon as it is on the
+    /// surface (`back`) or on another editable text area, else at the end. Cancel the returned item to stop.
+    private func awaitFocus(surface: TextSurface, pid: pid_t, holding: @escaping () -> Bool = { false },
+                            done: @escaping (_ back: Bool, _ now: AXUIElement?) -> Void) -> DispatchWorkItem {
+        var deadline = Date().addingTimeInterval(surface.focusGrace)
+        var work: DispatchWorkItem!
+        work = DispatchWorkItem {
+            let now = AX.focusedElement(pid: pid)
+            if let now, surface.owns(now) { done(true, now); return }
+            if let now, AX.isEditableTextArea(now) { done(false, now); return }
+            if holding() { deadline = Date().addingTimeInterval(surface.focusGrace) }
+            if Date() >= deadline { done(false, now); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+        return work
     }
 
     /// A scroll, move or resize: redraw the underlines once it settles. An automatic review also asks for a
@@ -2044,6 +2169,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// caller holding a fix index must stop.
     @discardableResult
     private func syncLive() -> Bool {
+        lastSyncCarried = false
+        if applying, KeyGuard.shared.isOn, writing { Log.write("review: live sync ran inside a write (nested run loop)") }
         guard var s = session, s.live else { return false }
         // Secure input came on (a password field): read nothing more.
         if IsSecureEventInputEnabled() {
@@ -2059,6 +2186,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         // A document of paragraph fields whose paragraphs on screen changed: fixes follow their paragraph.
         let oldLength = (s.list.text as NSString).length
+        let openEdit = popup.isVisible ? s.list.currentFix?.edit : nil
         if let remap = s.snapshot.surface.carry(&s.list, to: now) {
             s.fieldText = now
             session = s
@@ -2066,7 +2194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 + "\(remap.count) fix(es) kept, \(s.list.pendingCount) pending")
             lastTextMove = Date()
             restCheckDue = true
-            popup.hide()
+            lastSyncCarried = true
+            // The card stays on its fix when the fix survived the move (the relayout puts it under the word, or
+            // closes it); otherwise it would vanish under the user's click or ⏎.
+            if !popup.isVisible || s.list.currentFix?.edit != openEdit { popup.hide() }
             overlay.current = nil
             scheduleRelayout(after: 0.05, confirm: true)
             showLiveIsland()
@@ -2232,7 +2363,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard var s = session, s.live, s.list.text == update.text else { return }
         let open = popup.isVisible ? s.list.currentFix?.edit : nil
         let unchanged = s.list
-        s.list.reconcile(edits: ignoredFixes.filter(result.edits, in: update.text), covered: result.covered)
+        let usable = s.snapshot.surface.writableEdits(ignoredFixes.filter(result.edits, in: update.text),
+                                                      in: update.text, scopeLocation: 0)
+        s.list.reconcile(edits: usable, covered: result.covered)
         session = s
         // Nothing changed and the underlines are up: no redraw (a hide-and-show here was the flicker after a scroll).
         if s.list == unchanged, overlay.alphaValueIsShown, relayout == nil {
@@ -2340,10 +2473,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         popup.show(state, field: s.snapshot.frame, word: anchor)
     }
 
+    /// The card, bubble or island takes ⏎ and the other review keys while it is key. It must be key only while it is
+    /// on screen, its review is on, and the review's app is in front; otherwise ⏎ would go to Meboki (and do
+    /// nothing) instead of to the app the user is typing in. Anything else is ordered out here, with a log line.
+    private func releaseStrayKeys() {
+        let cardKey = popup.isKey, islandKey = island.isKey
+        guard cardKey || islandKey else { return }
+        let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let reviewApp = session?.snapshot.pid
+        let stray: String?
+        if session == nil { stray = "no review is on" }
+        else if (cardKey && !popup.isVisible) || (islandKey && !island.isVisible) { stray = "it is not on screen" }
+        else if let front, front != getpid(), front != reviewApp { stray = "another app is in front" }
+        else { stray = nil }
+        guard let stray else { return }
+        Log.write("popup keys: released (\(cardKey ? "card" : "island") held the keyboard but \(stray))")
+        popup.hide()
+        island.hide(animated: false)
+    }
+
+    /// An Apply that found the text changed and had nothing left to write: say so, and show the review again.
+    private func logDropped(_ what: String) {
+        Log.write("\(what): the text changed under the click and no fix is left to write; review refreshed")
+    }
+
+    /// An apply (single or all) is on the stack: a second one called from inside it is ignored, never nested.
+    private var applying = false
+    /// A write is inside `writeEdit` (only for the log line that shows a nested run loop).
+    private var writing = false
+
     /// ⇧⏎ / Apply: write the current fix. With underlines the card closes, the word flashes and the other
     /// underlines stay; in the fallback the card moves on to the next fix.
     private func applyCurrent() {
-        if syncLive() { return }
+        guard !applying else { Log.write("apply: ignored, another apply is still running"); return }
+        applying = true
+        defer { applying = false }
+        // The document moved by paragraph since the card was drawn: carry on with the same fix if it survived the
+        // move (the write is verified against the text as it is now); never drop the user's click silently.
+        let wanted = session?.list.currentFix?.edit
+        if syncLive(), !(lastSyncCarried && wanted != nil && session?.list.currentFix?.edit == wanted) {
+            logDropped("apply")
+            return
+        }
         guard var s = session, let i = s.list.current else { return }
         if s.mode == .underlines, !s.island {
             popup.hide()
@@ -2353,9 +2524,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if s.mode == .underlines { hideUnderlinesNow(suspend: true) }
         // A paste fallback hides the island; it takes the keys back when it had them.
         let islandHadKeys = s.island && island.isKey
-        KeyGuard.shared.begin()
-        let ok = write(i, in: &s)
-        KeyGuard.shared.end()
+        let ok = KeyGuard.shared.holding { write(i, in: &s) }
         guard ok else { return }
         session = s
         guard s.mode == .underlines else {
@@ -2390,16 +2559,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// paste rounds. The review keys are held while it runs (`KeyGuard`); Esc stops it after the current write.
     /// No live re-check until the last write.
     private func applyAll() {
-        if syncLive() { return }
+        guard !applying else { Log.write("apply all: ignored, another apply is still running"); return }
+        applying = true
+        defer { applying = false }
+        // Carried by paragraph: the fixes that are still pending go in (never a silent no-op).
+        if syncLive(), !(lastSyncCarried && (session?.list.pendingCount ?? 0) > 0) {
+            logDropped("apply all")
+            return
+        }
         guard var s = session else { return }
         // Before anything slow (grouping asks the app about formatting): a second ⏎ must not reach the app.
         KeyGuard.shared.begin()
+        // Paired by construction: whichever way this function leaves, the guard ends (`report` ends it with its log).
+        var guardEnded = false
+        defer { if !guardEnded { KeyGuard.shared.end(tail: true) } }
         hideUnderlinesNow(suspend: false)
         let surface = s.snapshot.surface, offset = s.scopeLocation
         func grouped(_ s: Session) -> [FixList.ApplyGroup] {
             let now = surface.text() ?? s.fieldText
             return s.list.applyAllGroups { span in
-                surface.isOneTextRun(NSRange(location: offset + span.location, length: span.length), text: now)
+                KeyGuard.shared.touch()
+                return surface.isOneTextRun(NSRange(location: offset + span.location, length: span.length), text: now)
             }
         }
         var groups = grouped(s)
@@ -2409,18 +2589,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // write the review takes the document as it is now, fixes matched by paragraph, and what's still pending is
         // grouped again. Fixes whose paragraph left the screen leave the list (the next check brings them back).
         let follows = s.live && surface.textFollowsScroll
+        // Such a surface also lists only the paragraphs near the screen, and a write scrolls it: a paragraph that
+        // leaves and returns is a new element. Its pending fixes wait (`parksDeparted`) and are put back when its
+        // exact text is the only one in the document again.
+        let parks = follows && surface.recreatesOffscreenParagraphs
+        if parks { s.list.parksDeparted = true }
         let started = Date()
-        var written = 0, followed = 0, stopped = false
+        var written = 0, followed = 0, skipped = 0, stopped = false
         func report(_ outcome: String) {
+            guardEnded = true
             let held = KeyGuard.shared.end(tail: true)
             Log.write("apply all: \(written) of \(planned) write(s) for \(total) fix(es), "
                 + String(format: "%.1f s", Date().timeIntervalSince(started)) + ", \(outcome)"
                 + (followed > 0 ? ", followed the document \(followed) time(s)" : "")
+                + (skipped > 0 ? ", \(skipped) skipped" : "")
                 + (held > 0 ? ", \(held) key press(es) held" : ""))
         }
         var next = 0
-        while next < groups.count {
+        var settling = 0
+        while true {
+            if next >= groups.count {
+                // Fixes of paragraphs that scrolled out of the rendered window: give the app a moment to render the
+                // paragraphs the last write scrolled to, then see whether they are back.
+                guard parks, s.list.parkedCount > 0, followed < 50, settling < 6 else { break }
+                if KeyGuard.shared.stopRequested { stopped = true; break }
+                settling += 1
+                KeyGuard.shared.touch()
+                Thread.sleep(forTimeInterval: 0.1)
+                if followDocument(&s) == .followed {
+                    followed += 1
+                    session = s
+                    groups = grouped(s)
+                    next = 0
+                }
+                continue
+            }
             if KeyGuard.shared.stopRequested { stopped = true; break }
+            KeyGuard.shared.touch()
             if follows, followed < 50 {
                 switch followDocument(&s) {
                 case .same:
@@ -2433,18 +2638,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     continue
                 case .moved:
                     // The rest come back with the next check of the text as it is now.
+                    s.list.dropParked()
                     session = s
                     report("stopped: the field's text moved with the scroll")
                     syncLive()
                     return
                 }
             }
-            guard writeGroup(groups[next], in: &s) else { report("stopped by a failed write"); return }
-            written += 1
+            switch writeGroup(groups[next], in: &s) {
+            case .failed:
+                session?.list.dropParked()
+                report("stopped by a failed write" + (skipped > 0 ? "; \(skipped) skipped" : ""))
+                return
+            case .skipped:
+                skipped += 1
+                let g = groups[next]
+                Log.write("apply all: skipped \(g.indices.count) fix(es) at \(g.range.location)+\(g.range.length): "
+                    + "the app wouldn't select the range and the paragraph is unchanged")
+                for i in g.indices { s.list.skip(at: i) }
+            case .written:
+                written += 1
+            }
             next += 1
             session = s
         }
-        report(stopped ? "stopped by Esc" : "done")
+        let left = s.list.parkedCount
+        s.list.dropParked()
+        session = s
+        report((stopped ? "stopped by Esc" : "done")
+            + (left > 0 ? "; \(left) fix(es) in paragraphs that never came back on screen" : ""))
         if s.live { requestLiveCheck(s) }
         if stopped, !s.list.isDone {
             // The rest come back once the field has settled.
@@ -2465,10 +2687,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func followDocument(_ s: inout Session) -> Follow {
         guard let now = s.snapshot.surface.text(), now != s.list.text else { return .same }
         var list = s.list
-        guard let remap = s.snapshot.surface.carry(&list, to: now) else { return .moved }
+        guard let remap = s.snapshot.surface.carry(&list, to: now) else {
+            // Nil also means one small change describes it (the same paragraphs with other text, or one paragraph
+            // more or fewer at an edge): the surface says whether Apply all may follow that like a live review does.
+            var small = s.list
+            guard s.snapshot.surface.followsSmallChangesInApplyAll,
+                  let change = TextChange.between(s.list.text, now), small.textEdited(change) != nil else { return .moved }
+            s.list = small
+            s.fieldText = now
+            Log.write("apply all: document changed at \(change.range.location) (\(change.delta >= 0 ? "+" : "")\(change.delta)), "
+                + "\(small.pendingCount) pending"
+                + (small.parkedCount > 0 ? ", \(small.parkedCount) waiting for their paragraph" : ""))
+            return .followed
+        }
         s.list = list
         s.fieldText = now
-        Log.write("apply all: document moved, \(remap.count) fix(es) kept, \(list.pendingCount) pending")
+        Log.write("apply all: document moved, \(remap.count) fix(es) kept, \(list.pendingCount) pending"
+            + (list.parkedCount > 0 ? ", \(list.parkedCount) waiting for their paragraph" : ""))
         return .followed
     }
 
@@ -2617,34 +2852,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Writes one Apply all group (one fix, or several in one paragraph) and marks its fixes applied. The live
     /// re-check waits for the end of the apply.
-    private func writeGroup(_ g: FixList.ApplyGroup, in s: inout Session) -> Bool {
+    private enum GroupWrite { case written, skipped, failed }
+
+    private func writeGroup(_ g: FixList.ApplyGroup, in s: inout Session) -> GroupWrite {
         let e = Edit(range: g.range, original: g.original, replacement: g.replacement)
-        guard writeEdit(e, in: &s) else { return false }
+        guard writeEdit(e, in: &s, mayLeaveUntouched: true) else {
+            // The app refused to select the paragraph's range and left it as it was (`skipsUntouchedFailuresInApplyAll`):
+            // the group's fixes stay as they are and the next group goes on.
+            if leftUntouched { leftUntouched = false; return .skipped }
+            return .failed
+        }
         s.list.applyGroup(g)
         afterWrite(e, in: &s, recheck: false)
-        return true
+        return .written
     }
+
+    /// Set by `writeEdit` when it didn't end the session because the failed write left the field untouched.
+    private var leftUntouched = false
 
     /// After a write: the field value Meboki now expects.
     private func afterWrite(_ e: Edit, in s: inout Session, recheck: Bool) {
         s.lastWrite = Date()
-        let written = NSRange(location: s.scopeLocation + e.range.location, length: e.range.length)
-        s.basis = (s.basis as NSString).replacingCharacters(in: written, with: e.replacement)
         if s.live {
             // The list is the truth; anything else in the field is diffed against it once the write settled.
+            // `basis` (the snapshot's text) is stale here: a document that moved its window since the check has
+            // ranges far past the snapshot's end, and patching it threw an Objective-C exception that AppKit
+            // swallowed, skipping every `defer` (the apply flag and the key guard stayed on, 2026-11-22).
+            s.basis = s.list.text
             s.fieldText = s.list.text
             if recheck { requestLiveCheck(s) }
             return
         }
-        // What the app now reports, so later edit checks compare against the real value.
         let range = NSRange(location: s.scopeLocation + e.range.location, length: e.range.length)
-        s.fieldText = s.snapshot.surface.text()
-            ?? (s.fieldText as NSString).replacingCharacters(in: range, with: e.replacement)
+        if NSMaxRange(range) <= (s.basis as NSString).length {
+            s.basis = (s.basis as NSString).replacingCharacters(in: range, with: e.replacement)
+        }
+        // What the app now reports, so later edit checks compare against the real value.
+        if let now = s.snapshot.surface.text() {
+            s.fieldText = now
+        } else if NSMaxRange(range) <= (s.fieldText as NSString).length {
+            s.fieldText = (s.fieldText as NSString).replacingCharacters(in: range, with: e.replacement)
+        }
     }
 
     /// Writes `e` (range relative to `s.list.text`) into the field. On failure ends the session with a message,
     /// or in a live review follows the field (the user typed meanwhile).
-    private func writeEdit(_ e: Edit, in s: inout Session) -> Bool {
+    private func writeEdit(_ e: Edit, in s: inout Session, mayLeaveUntouched: Bool = false) -> Bool {
+        KeyGuard.shared.touch()
+        writing = true
+        defer { writing = false; KeyGuard.shared.touch() }
         if !s.logged {
             let app = NSRunningApplication(processIdentifier: s.snapshot.pid)?.bundleIdentifier ?? "pid \(s.snapshot.pid)"
             Log.write("session: \(s.list.fixes.count) fix(es) in \(app)")
@@ -2660,6 +2916,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // The keystroke fallback must reach the field, not a Meboki panel. A panel that was up gets a
             // moment to go; later writes of an apply find nothing up and don't wait.
             usedPaste = true
+            KeyGuard.shared.touch()
             let shown = popup.isVisible || island.isVisible || overlay.isVisible || toasts.isVisible
             popup.hide()
             island.hide(animated: false)
@@ -2668,6 +2925,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if shown { Thread.sleep(forTimeInterval: 0.15) }
         }
         s.usedPaste = s.usedPaste || usedPaste
+        // Apply all on a surface that skips what the app won't select: the paragraph is proven as it was, so the
+        // session goes on (the caller skips the group).
+        if !ok, mayLeaveUntouched, s.snapshot.surface.skipsUntouchedFailuresInApplyAll,
+           s.snapshot.surface.lastWriteLeftFieldUntouched,
+           // Quotes folded: earlier writes of this apply may have been curled by the app (Slack).
+           let now = s.snapshot.surface.text(), QuoteFolding.fold(now) == QuoteFolding.fold(expected) {
+            leftUntouched = true
+            return false
+        }
         guard ok else {
             // Live review: the user typed meanwhile, so the original wasn't there. Follow the field instead.
             if s.live {
@@ -2737,11 +3003,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Focus moved. A multi-line text area the user can type in becomes the target, and its text is checked
     /// after a pause (a field that already holds text gets underlined without typing).
-    private func autoFocusChanged(_ el: AXUIElement?, pid: pid_t) {
+    private func autoFocusChanged(_ el: AXUIElement?, pid: pid_t, settled: Bool = false) {
         // Another paragraph of the same document (`CompositeSurface`): still the same text. The target, its
         // bounds verdict and a review stay; the check only learns the new caret.
         if let el, let t = autoTarget, t.pid == pid, !CFEqual(el, t.element), t.surface.owns(el) {
             if session == nil { requestAutoCheck() }
+            return
+        }
+        autoGraceWork?.cancel()
+        // Focus passes through something that isn't a text area between two blocks of a document (`focusGrace`):
+        // keep the target and look again once it settles.
+        if !settled, let t = autoTarget, t.pid == pid, t.surface.focusGrace > 0, !(el.map(AX.isEditableTextArea) ?? false) {
+            autoGraceWork = awaitFocus(surface: t.surface, pid: pid, holding: { [weak self] in
+                self.map { $0.popup.isVisible || $0.session?.island == true } ?? false
+            }) { [weak self] back, now in
+                guard let self, self.autoTarget?.pid == pid else { return }
+                if back {
+                    if self.session == nil { self.requestAutoCheck() }
+                } else {
+                    self.autoFocusChanged(now, pid: pid, settled: true)
+                }
+            }
             return
         }
         stopAutoCheck()
@@ -2963,7 +3245,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // The model changed since this check started: drop it. The text check below drops one for text that's gone.
         guard let result = update.result, let t = autoTarget, autoCheckAllowed(t), let pipe = autoPipeline,
               pipe === pipeline else { return }
-        let edits = ignoredFixes.filter(result.edits, in: update.text)
+        let edits = t.surface.writableEdits(ignoredFixes.filter(result.edits, in: update.text),
+                                            in: update.text, scopeLocation: 0)
         if result.requests > 0 || !edits.isEmpty {
             Log.write("auto check: \(edits.count) fix(es), \(result.requests) request(s)"
                 + (result.foreignChunks > 0 ? ", \(result.foreignChunks) paragraph(s) not in English" : ""))

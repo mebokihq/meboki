@@ -129,6 +129,8 @@ struct SettingsActions {
     var openAppleSettings: () -> Void = {}
     /// Opens the onboarding window (About › Welcome Guide).
     var showWelcome: () -> Void = {}
+    /// Opens the changelog: every release up to this one (About › Changelog).
+    var showChangelog: () -> Void = {}
     /// Opens the update window (Check Now, or the version already found).
     var showUpdate: () -> Void = {}
 }

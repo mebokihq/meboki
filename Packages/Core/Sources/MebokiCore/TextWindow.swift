@@ -20,10 +20,15 @@ public enum TextWindow {
     /// both start with (one of the first two of either), pairs of paragraphs must be equal, except one pair that may
     /// differ by a small edit. Each place the start occurs is tried; the longest overlap wins (a document may repeat
     /// a paragraph), at equal length the one without an edit.
-    public static func alignment(old: String, new: String) -> Alignment? {
+    ///
+    /// `evenWhenSmall`: line the paragraphs up even when one small text change describes the difference. A write's
+    /// check uses it: right after a paste Docs may add or drop one short paragraph at an edge of its window, and
+    /// that is a shift of whole paragraphs, not an edit (2026-11-22).
+    public static func alignment(old: String, new: String, evenWhenSmall: Bool = false) -> Alignment? {
         let o = old as NSString, n = new as NSString
         guard o.length > 0, n.length > 0, old != new else { return nil }
-        if let c = TextChange.between(old, new), c.range.length <= 200, (c.replacement as NSString).length <= 200 {
+        if !evenWhenSmall, let c = TextChange.between(old, new), c.range.length <= 200,
+           (c.replacement as NSString).length <= 200 {
             return nil
         }
         let op = paragraphs(o), np = paragraphs(n)

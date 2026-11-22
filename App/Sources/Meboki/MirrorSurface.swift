@@ -112,15 +112,19 @@ final class MirrorSurface: TextSurface {
     /// document when the caret moves far, and the same words there must never take the fix. Paste only.
     func replace(pid: pid_t, range: NSRange, original: String, replacement: String, expected: String,
                  pasteOnly: Bool, beforeKeystroke: () -> Void) -> Bool {
+        lastWriteLeftFieldUntouched = false
         guard text() == expected else {
             Log.write("edit @\(range.location)+\(range.length) \(Log.pair(original, replacement)): "
                       + "the document text around the caret changed since the check; not written")
             return false
         }
         if AX.replace(in: element, pid: pid, range: range, original: original, replacement: replacement,
-                      pasteOnly: true, beforeKeystroke: beforeKeystroke, normalize: Self.normalize) {
+                      pasteOnly: true, beforeKeystroke: beforeKeystroke, normalize: Self.normalize,
+                      onUntouched: { [self] in lastWriteLeftFieldUntouched = true }) {
             return true
         }
+        // Proven untouched (Docs wouldn't select the range): nothing was pasted, so there is no moved write to find.
+        if lastWriteLeftFieldUntouched { return false }
         // Docs may move the copy's window right after a paste, so the check above (everything before the fix
         // unchanged) can fail for a write that went in. It counts only when the text as written lines up with the
         // new window and the written range lies in what both hold.
@@ -129,7 +133,7 @@ final class MirrorSurface: TextSurface {
         for _ in 0..<10 {
             if let now = text() {
                 if now == written { return true }
-                if let a = TextWindow.alignment(old: written, new: now), a.edit == nil,
+                if let a = TextWindow.alignment(old: written, new: now, evenWhenSmall: true), a.edit == nil,
                    NSLocationInRange(writtenRange.location, a.overlap),
                    NSMaxRange(writtenRange) <= NSMaxRange(a.overlap), a.overlap.length >= 200 {
                     Log.write("edit @\(range.location)+\(range.length): written; the text around the caret moved "
@@ -147,6 +151,17 @@ final class MirrorSurface: TextSurface {
     /// the scroll.
     var textFollowsScroll: Bool { true }
     func learnTextFollowsScroll() {}
+
+    /// Docs sometimes won't select one fix's range (the selection never proves out; 2026-11-22, "there" → "their"
+    /// stopped every Apply all at its first write). The field is proven unchanged then, so Apply all skips that
+    /// fix and goes on.
+    var skipsUntouchedFailuresInApplyAll: Bool { true }
+    private(set) var lastWriteLeftFieldUntouched = false
+    /// Docs also trims or adds one paragraph at an edge of its window between writes (2026-11-22: 93 characters
+    /// left the end after the 16th write, and Apply all stopped). One `TextChange` describes that, so Apply all
+    /// follows it: fixes it touches leave, the rest keep going. Every write still needs the copy to hold exactly
+    /// the expected text.
+    var followsSmallChangesInApplyAll: Bool { true }
 
     /// A small edit: nil (one text change describes it). A moved window: fixes in the paragraphs both windows hold
     /// move with them (`TextWindow.alignment`), the rest leave until the next check. Nothing shared: every fix leaves.

@@ -32,6 +32,8 @@ final class PopupController {
     }
 
     var isVisible: Bool { card.isVisible || bubble.isVisible }
+    /// The card or bubble holds the keyboard (⏎ goes to it, not to the app).
+    var isKey: Bool { card.isKey || bubble.isKey }
 
     /// Shows `state` under `word`, or below `field` without one. Switching between card and bubble (the style
     /// changed, or the fallback) hides the other first, so it pops in fresh.

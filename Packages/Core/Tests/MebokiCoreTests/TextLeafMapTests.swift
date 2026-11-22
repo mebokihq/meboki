@@ -111,4 +111,31 @@ import Testing
         let inside = ns.range(of: "is ", options: .backwards, range: NSRange(location: 0, length: edge))
         #expect(map.edited(TextChange(range: inside, replacement: "was ")) != nil)
     }
+
+    /// x.com list items (Chrome, 2026-11-22): each item is one leaf "    • item", while the value puts the indent
+    /// before the line break. The leaf matches without its indent, and leaf-local ranges count the indent.
+    @Test func linesUpIndentedListItemLeaves() {
+        let value = "Late again.    \n• First item have an error.    \n• Second item\nAfter."
+        let leaves = ["Late again.", "    • First item have an error.", "    • Second item", "After."]
+        let map = TextLeafMap(value: value, leaves: leaves)
+        let ns = value as NSString
+        #expect(map.segments.map(\.leaf) == [0, 1, 2, 3])
+        #expect(map.segments.map(\.offset) == [0, 4, 4, 0])
+        #expect(map.coverage(of: value) == 1)
+        let have = ns.range(of: "have")
+        #expect(map.pieces(of: have).map(\.range) == [NSRange(location: 17, length: 4)])
+        #expect(map.locate(have.location)! == (1, 17))
+        #expect(map.locate(ns.range(of: "• Second").location)! == (2, 4))
+        // Marker counts include every leaf's whole text: "Late again." (11) + 4 spaces + "• First" → value "First".
+        #expect(map.valueIndex(leafCount: 11 + 6, atStart: true) == ns.range(of: "First").location)
+        // Inside the left-out indent: the start of the item's matched text.
+        #expect(map.valueIndex(leafCount: 11 + 2, atStart: true) == ns.range(of: "• First").location)
+        #expect(map.valueIndex(leafCount: 0, atStart: true) == 0)
+        #expect(map.valueIndex(leafCount: 11, atStart: false) == 11)
+        // An edit inside the item keeps its offset and grows its leaf.
+        let (edited, leaf) = map.edited(TextChange(range: have, replacement: "has"))!
+        #expect(leaf == 1)
+        #expect(edited.segments[1].offset == 4)
+        #expect(edited.segments[1].leafLength == leaves[1].utf16.count - 1)
+    }
 }
