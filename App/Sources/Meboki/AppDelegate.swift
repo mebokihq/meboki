@@ -214,8 +214,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         /// are checked again after a pause (card or bubble style, with underlines).
         var live = false
         var scheduler: CheckScheduler?
-        /// Saved before any paste fallback; restored once when the session ends.
-        let clipboard = ClipboardGuard()
+        /// A fix in this session needed the paste fallback: later writes paste straight away (`pasteOnly`).
+        /// The clipboard is restored after each apply (`Clipboard`), not when the session ends.
         var usedPaste = false
         var logged = false
 
@@ -474,6 +474,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pendingURLs: [URL] = []
 
     func applicationWillTerminate(_ notification: Notification) {
+        Clipboard.shared.restoreNow()
         server.stop()
     }
 
@@ -2524,7 +2525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if s.mode == .underlines { hideUnderlinesNow(suspend: true) }
         // A paste fallback hides the island; it takes the keys back when it had them.
         let islandHadKeys = s.island && island.isKey
-        let ok = KeyGuard.shared.holding { write(i, in: &s) }
+        let ok = KeyGuard.shared.holding { Clipboard.shared.holding { write(i, in: &s) } }
         guard ok else { return }
         session = s
         guard s.mode == .underlines else {
@@ -2573,6 +2574,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Paired by construction: whichever way this function leaves, the guard ends (`report` ends it with its log).
         var guardEnded = false
         defer { if !guardEnded { KeyGuard.shared.end(tail: true) } }
+        // The user's clipboard goes back once, after the last write, however this function leaves.
+        Clipboard.shared.begin()
+        defer { Clipboard.shared.end() }
         hideUnderlinesNow(suspend: false)
         let surface = s.snapshot.surface, offset = s.scopeLocation
         func grouped(_ s: Session) -> [FixList.ApplyGroup] {
@@ -2957,7 +2961,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return true
     }
 
-    /// Restores the clipboard if a paste was used, and optionally puts the caret after the checked text.
+    /// Ends the review, and optionally puts the caret after the checked text.
     private func endSession(placeCaret: Bool) {
         watcher?.stop()
         watcher = nil
@@ -2972,7 +2976,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         session = nil
         checkID += 1  // late live results of this session drop themselves
         if let scheduler = s.scheduler { Task { await scheduler.cancel() } }
-        if s.usedPaste { s.clipboard.restore() }
         if placeCaret, s.snapshot.surface.placesCaretAfterReview, s.list.appliedCount > 0,
            let now = s.snapshot.surface.text() {
             let end = s.scopeLocation + (s.list.text as NSString).length

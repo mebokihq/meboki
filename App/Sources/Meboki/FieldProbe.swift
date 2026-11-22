@@ -85,12 +85,12 @@ enum FieldProbe {
             guard NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier else {
                 print("replace: \(args[i + 1]) isn't in front; nothing written"); return
             }
-            let clipboard = ClipboardGuard()
-            let ok = AX.replace(in: el, pid: app.processIdentifier, range: r, original: word, replacement: replacement)
+            let ok = Clipboard.shared.holding {
+                AX.replace(in: el, pid: app.processIdentifier, range: r, original: word, replacement: replacement)
+            }
             let expected = ns.replacingCharacters(in: r, with: replacement)
             print("replace \(word.debugDescription) → \(replacement.debugDescription) @\(r.location): \(ok), field as expected \(AX.text(el) == expected)")
-            clipboard.restore(after: 0.3)
-            RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+            RunLoop.main.run(until: Date().addingTimeInterval(1.2))
         }
     }
 
@@ -126,14 +126,14 @@ enum FieldProbe {
         guard let (word, replacement) = replace else { return }
         let r = ns.range(of: word)
         guard r.location != NSNotFound else { print("  surface replace: not in the document"); return }
-        let clipboard = ClipboardGuard()
-        let ok = surface.replace(pid: pid, range: r, original: word, replacement: replacement, expected: text,
-                                 pasteOnly: false) {}
+        let ok = Clipboard.shared.holding {
+            surface.replace(pid: pid, range: r, original: word, replacement: replacement, expected: text,
+                            pasteOnly: false) {}
+        }
         let expected = ns.replacingCharacters(in: r, with: replacement)
         print("  surface replace \(word.debugDescription) → \(replacement.debugDescription) @\(r.location): \(ok), "
             + "document as expected \(surface.text() == expected)")
-        clipboard.restore(after: 0.3)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+        RunLoop.main.run(until: Date().addingTimeInterval(1.2))
     }
 }
 #endif
