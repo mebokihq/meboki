@@ -45,6 +45,15 @@ extension DS {
     static let hover = dynamic("hover", light: .rgba(0, 0, 0, 0.05), dark: .rgba(255, 255, 255, 0.06))
     static let group = dynamic("group", light: .rgba(0, 0, 0, 0.035), dark: .rgba(255, 255, 255, 0.05))
 
+    /// The app icon's coral (its wavy underline), fixed: it doesn't follow the color tone.
+    static let iconCoral = Color(nsColor: .hex(0xFF5A5F))
+    /// Settings › About: the "Report an issue" box, a soft coral (design_code.md §8.7).
+    static let helpFill = dynamic("helpFill", light: .hex(0xFFF1F1), dark: .hex(0x33262A))
+    static let helpBorder = dynamic("helpBorder", light: .hex(0xFFD9DA), dark: .hex(0x4A3036))
+    /// An ink button: charcoal in light mode, near-white in dark mode, with the opposite label.
+    static let ink = dynamic("ink", light: .hex(0x1E1D21), dark: .hex(0xF2F2F4))
+    static let onInk = dynamic("onInk", light: .hex(0xFFFFFF), dark: .hex(0x1E1D21))
+
     static var catSpelling: Color { palette.catSpelling }
     static var catGrammar: Color { palette.catGrammar }
     static var catClarity: Color { palette.catClarity }
@@ -284,6 +293,7 @@ extension DS {
     enum Font {
         static let swap = SwiftUI.Font.system(size: 24, weight: .semibold)
         static let aboutTitle = SwiftUI.Font.system(size: 24, weight: .bold)
+        static let aboutTagline = SwiftUI.Font.system(size: 13.5)
         static let paneTitle = SwiftUI.Font.system(size: 20, weight: .bold)
         static let bubbleSuggestion = SwiftUI.Font.system(size: 19, weight: .semibold)
         static let island = SwiftUI.Font.system(size: 15)
