@@ -76,6 +76,55 @@ public struct MirrorGeometry: Equatable, Sendable {
         return (0.85...1.1).contains(s) ? s : nil
     }
 
+    /// A line of text near an empty line, in the mirror: one character's rect on it, and how many lines it is from
+    /// the empty line.
+    public struct Neighbour: Equatable, Sendable {
+        public var rect: CGRect
+        public var steps: Int
+        public init(rect: CGRect, steps: Int) {
+            self.rect = rect
+            self.steps = steps
+        }
+    }
+
+    /// The caret's point in the mirror when it sits on an empty line, where Chrome gives no caret bounds (it
+    /// answers with the clipped paragraph box, 2400 × 1 pt; 2026-11-23). An empty paragraph in the copy is one line
+    /// with no extra spacing (measured: text lines 16.5 pt apart sit 33 pt apart across one empty line), so the line
+    /// lies between the text lines around it: `above` is the last line of the text above, `below` the first line of
+    /// the text below, each `steps` lines away. With text on one side only, `pitch` (copy points per line) steps
+    /// from it. x: `lineStartX`, where a line of a neighbouring paragraph starts. Nil when the rects don't make sense.
+    public static func emptyLineCaret(lineStartX: CGFloat, above: Neighbour?, below: Neighbour?,
+                                      pitch: CGFloat?) -> CGPoint? {
+        let y: CGFloat
+        switch (above, below) {
+        case let (a?, b?):
+            guard a.steps > 0, b.steps > 0 else { return nil }
+            let step = (a.rect.midY - b.rect.midY) / CGFloat(a.steps + b.steps)
+            guard step >= minimumPitch else { return nil }
+            y = a.rect.midY - step * CGFloat(a.steps)
+        case let (a?, nil):
+            guard a.steps > 0, let pitch, pitch >= minimumPitch else { return nil }
+            y = a.rect.midY - pitch * CGFloat(a.steps)
+        case let (nil, b?):
+            guard b.steps > 0, let pitch, pitch >= minimumPitch else { return nil }
+            y = b.rect.midY + pitch * CGFloat(b.steps)
+        case (nil, nil):
+            return nil
+        }
+        return CGPoint(x: lineStartX, y: y)
+    }
+
+    /// Copy points per line between two text lines `steps` lines apart (`upper` above `lower`); nil when they
+    /// don't give a line height text can have.
+    public static func pitch(upper: CGRect, lower: CGRect, steps: Int) -> CGFloat? {
+        guard steps > 0 else { return nil }
+        let p = (upper.midY - lower.midY) / CGFloat(steps)
+        return p >= minimumPitch ? p : nil
+    }
+
+    /// No line of text is closer than this to the next (copy points).
+    static let minimumPitch: CGFloat = 4
+
     /// The caret is drawn on screen: an element clipped by its scroll area keeps a frame of height 0 or 1 at the
     /// area's edge (Chrome), which isn't a caret position.
     public static func isVisibleCaret(_ r: CGRect) -> Bool {

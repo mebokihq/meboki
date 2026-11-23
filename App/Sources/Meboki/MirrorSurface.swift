@@ -203,18 +203,7 @@ final class MirrorSurface: TextSurface {
 
     // MARK: Geometry
 
-    /// The last anchor taken from a visible caret, and the layout it holds for.
-    private var lastAnchor: (geometry: MirrorGeometry, key: LayoutKey)?
     private var cached: (geometry: MirrorGeometry?, text: String, at: Date)?
-
-    /// What must stay the same for an earlier caret anchor to still hold: nothing scrolled (the pages on screen),
-    /// zoomed, or reflowed in the copy (its first character's place).
-    private struct LayoutKey: Equatable {
-        var pages: [CGRect]
-        var editor: CGRect
-        var scale: CGFloat
-        var origin: CGRect?
-    }
 
     /// The mapping from the copy to the screen, or nil when it can't be made now. Reused for 0.1 s: the review
     /// measures every fix in one go.
@@ -231,41 +220,132 @@ final class MirrorSurface: TextSurface {
         guard let raw = raw(text) else { return nil }
         let ns = raw as NSString
         let pages = parts.pageFrames()
-        let key = LayoutKey(pages: pages, editor: editor, scale: scale,
-                            origin: ns.length > 0 ? AX.bounds(element, ns.rangeOfComposedCharacterSequence(at: 0),
-                                                              text: raw) : nil)
+        let key = MirrorLayoutKey(pages: pages, editor: editor, scale: scale,
+                                  origin: ns.length > 0 ? AX.bounds(element, ns.rangeOfComposedCharacterSequence(at: 0),
+                                                                    text: raw) : nil,
+                                  firstParagraph: MirrorLayoutKey.firstParagraph(of: raw))
         guard let caret = parts.caretFrame(), MirrorGeometry.isVisibleCaret(caret),
-              let mirrorCaret = mirrorCaretPoint() else {
+              let (mirrorCaret, measured) = mirrorCaretPoint(raw: raw) else {
             // No caret on screen (a selection hides it, or it scrolled away): the last anchor, if nothing moved.
-            if let last = lastAnchor, last.key == key { return last.geometry }
+            // Kept by the editor page, so a new check (⌃⌥G after Esc ended the automatic review) finds it too.
+            if let last = parts.lastAnchor, last.key == key { return last.geometry }
             return nil
         }
         let screenCaret = CGPoint(x: caret.minX, y: caret.midY)
-        parts.learn(MirrorGeometry.Sample(mirrorY: mirrorCaret.y, screenY: screenCaret.y),
-                    layout: "\(key)", scale: scale)
+        // Line spacing is learned from measured carets only, never from one worked out on an empty line.
+        if measured {
+            parts.learn(MirrorGeometry.Sample(mirrorY: mirrorCaret.y, screenY: screenCaret.y),
+                        layout: "\(key)", scale: scale)
+        }
         let page = pages.first { $0.minY <= screenCaret.y && screenCaret.y <= $0.maxY }
         let margin = page.map { MirrorGeometry.margin(pageWidth: $0.width, mirrorWidth: mirrorWidth, scale: scale) } ?? 0
         let g = MirrorGeometry(mirrorCaret: mirrorCaret, screenCaret: screenCaret, scale: scale,
                                band: MirrorGeometry.band(page: page, editor: editor, margin: margin),
                                lineScale: parts.lineScale ?? MirrorGeometry.defaultLineScale)
-        lastAnchor = (g, key)
+        parts.lastAnchor = (g, key)
         return g
     }
 
     /// Where the caret sits in the copy: Chrome's bounds of the collapsed selection (a zero-width rect). Asked by
     /// marker, not by offset: an offset at a paragraph break is both the end of one paragraph and the start of the
     /// next, and the caret at the end of a line was placed on the next line (2026-11-22).
-    private func mirrorCaretPoint() -> CGPoint? {
+    /// `measured`: false when the caret sits on an empty line and its point was worked out from the text around it.
+    private func mirrorCaretPoint(raw: String) -> (point: CGPoint, measured: Bool)? {
         guard let sel = AX.copy(element, "AXSelectedTextMarkerRange"),
               CFGetTypeID(sel) == AXTextMarkerRangeGetTypeID() else { return nil }
         let range = sel as! AXTextMarkerRange
-        guard CFEqual(AXTextMarkerRangeCopyStartMarker(range), AXTextMarkerRangeCopyEndMarker(range)),
-              let v = AX.param(element, kAXBoundsForTextMarkerRangeParameterizedAttribute, range),
-              CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
-        var r = CGRect.zero
-        guard AXValueGetValue(v as! AXValue, .cgRect, &r), r.height > 0, r.height.isFinite, r.width < 4,
-              let c = AX.cocoa(r) else { return nil }
-        return CGPoint(x: c.minX, y: c.midY)
+        let start = AXTextMarkerRangeCopyStartMarker(range)
+        guard CFEqual(start, AXTextMarkerRangeCopyEndMarker(range)) else { return nil }
+        if let v = AX.param(element, kAXBoundsForTextMarkerRangeParameterizedAttribute, range),
+           CFGetTypeID(v) == AXValueGetTypeID() {
+            var r = CGRect.zero
+            if AXValueGetValue(v as! AXValue, .cgRect, &r), r.height > 1, r.height.isFinite, r.width < 4,
+               let c = AX.cocoa(r) {
+                return (CGPoint(x: c.minX, y: c.midY), true)
+            }
+        }
+        return emptyLineCaretPoint(start, raw: raw).map { ($0, false) }
+    }
+
+    /// The caret's point in the copy when it sits in an empty paragraph: Chrome answers its bounds with the
+    /// paragraph's clipped box (2400 × 1 pt, 2026-11-23), so the point comes from the text lines around it
+    /// (`MirrorGeometry.emptyLineCaret`). The paragraph is the copy's child that holds the caret marker; every
+    /// child is one line-starting paragraph (an empty one holds a lone "\n"), and their strings must add up to the
+    /// copy's value, else nil.
+    private func emptyLineCaretPoint(_ marker: AXTextMarker, raw: String) -> CGPoint? {
+        guard let u = AX.param(element, "AXUIElementForTextMarker", marker), CFGetTypeID(u) == AXUIElementGetTypeID(),
+              let kids = AX.copy(element, kAXChildrenAttribute) as? [AXUIElement],
+              let index = kids.firstIndex(where: { CFEqual($0, u as! AXUIElement) }) else { return nil }
+        let ns = raw as NSString
+        guard let paragraphs = parts.paragraphRanges(of: element, children: kids, raw: raw) else { return nil }
+        let blank = paragraphs.map { Self.isBlank(ns.substring(with: $0)) }
+        guard blank[index] else { return nil }
+
+        /// The rect of the first (or last) character of paragraph `i` that has one.
+        func edge(_ i: Int, last: Bool) -> CGRect? {
+            let p = paragraphs[i]
+            var tries = 0
+            var at = last ? NSMaxRange(p) - 1 : p.location
+            while at >= p.location, at < NSMaxRange(p), tries < 6 {
+                let c = ns.rangeOfComposedCharacterSequence(at: at)
+                at = last ? c.location - 1 : NSMaxRange(c)
+                if Self.isBlank(ns.substring(with: c)) { continue }
+                tries += 1
+                if let r = AX.bounds(element, c, text: raw) { return r }
+            }
+            return nil
+        }
+        let above = (0..<index).last { !blank[$0] }
+        let below = (index + 1..<paragraphs.count).first { !blank[$0] }
+        let aboveRect = above.flatMap { edge($0, last: true) }
+        let belowRect = below.flatMap { edge($0, last: false) }
+        guard let lineStartX = (belowRect ?? above.flatMap { edge($0, last: false) })?.minX else { return nil }
+
+        // Text on one side only: the line height from that side's next text paragraph, or its own wrapped lines.
+        var pitch: CGFloat?
+        if aboveRect == nil || belowRect == nil, let near = above ?? below {
+            let far = above != nil ? (0..<near).last { !blank[$0] } : (near + 1..<paragraphs.count).first { !blank[$0] }
+            if let far {
+                let (top, bottom) = (min(near, far), max(near, far))
+                if let u = edge(top, last: true), let l = edge(bottom, last: false) {
+                    pitch = MirrorGeometry.pitch(upper: u, lower: l, steps: bottom - top)
+                }
+            }
+            if pitch == nil, let lines = AX.lineRects(element, range: paragraphs[near], in: raw), lines.count > 1 {
+                pitch = MirrorGeometry.pitch(upper: lines[0], lower: lines[lines.count - 1], steps: lines.count - 1)
+            }
+        }
+        return MirrorGeometry.emptyLineCaret(
+            lineStartX: lineStartX,
+            above: zip(above, aboveRect).map { .init(rect: $0.1, steps: index - $0.0) },
+            below: zip(below, belowRect).map { .init(rect: $0.1, steps: $0.0 - index) },
+            pitch: pitch)
+    }
+
+    /// A paragraph with nothing drawn: empty, spaces, or zero-width characters.
+    private static func isBlank(_ s: String) -> Bool {
+        s.unicodeScalars.allSatisfy { CharacterSet.whitespacesAndNewlines.contains($0) || $0 == "\u{200B}" }
+    }
+}
+
+/// Both values, or nil.
+private func zip<A, B>(_ a: A?, _ b: B?) -> (A, B)? {
+    guard let a, let b else { return nil }
+    return (a, b)
+}
+
+/// What must stay the same for an earlier caret anchor to still hold: nothing scrolled (the pages on screen),
+/// zoomed, or reflowed in the copy (its first character's place), and the copy still starting at the same
+/// paragraph (Docs moves its window on its own; the first character's place doesn't show that).
+struct MirrorLayoutKey: Equatable {
+    var pages: [CGRect]
+    var editor: CGRect
+    var scale: CGFloat
+    var origin: CGRect?
+    var firstParagraph: String
+
+    static func firstParagraph(of raw: String) -> String {
+        String(raw.prefix { $0 != "\n" }.prefix(120))
     }
 }
 
@@ -278,6 +358,9 @@ final class MirrorParts {
     private var pages: AXUIElement?
     private var zoomField: AXUIElement?
     private var searched: Date?
+    /// The last anchor taken from a visible caret, and the layout it holds for. Kept here, per editor page, not
+    /// per surface: every check makes a new surface, and ⌃⌥G right after Esc found none (2026-11-23).
+    var lastAnchor: (geometry: MirrorGeometry, key: MirrorLayoutKey)?
 
     init(root: AXUIElement) {
         self.root = root
@@ -353,6 +436,31 @@ final class MirrorParts {
         samples.append(sample)
         if samples.count > 16 { samples.removeFirst() }
         if let s = MirrorGeometry.lineScale(samples: samples, scale: scale) { lineScale = s }
+    }
+
+    private var paragraphs: (raw: String, ranges: [NSRange])?
+
+    /// The UTF-16 range of each child of `copy` (a paragraph) in its value `raw`: their strings joined with nothing
+    /// make the value (Chrome, 2026-11-23: an empty paragraph is its own child holding a lone "\n", so splitting
+    /// the value at "\n" doesn't give the paragraphs).
+    /// Nil when they don't add up. Kept while the value stays the same.
+    func paragraphRanges(of copy: AXUIElement, children: [AXUIElement], raw: String) -> [NSRange]? {
+        if let p = paragraphs, p.raw == raw, p.ranges.count == children.count { return p.ranges }
+        let ns = raw as NSString
+        var ranges: [NSRange] = []
+        var at = 0
+        for child in children {
+            guard let r = AX.param(copy, "AXTextMarkerRangeForUIElement", child),
+                  CFGetTypeID(r) == AXTextMarkerRangeGetTypeID(),
+                  let str = AX.param(copy, "AXStringForTextMarkerRange", r) as? String else { return nil }
+            let len = (str as NSString).length
+            guard at + len <= ns.length, ns.substring(with: NSRange(location: at, length: len)) == str else { return nil }
+            ranges.append(NSRange(location: at, length: len))
+            at += len
+        }
+        guard at == ns.length else { return nil }
+        paragraphs = (raw, ranges)
+        return ranges
     }
 
     func editorFrame() -> CGRect? { fresh { editor }.flatMap(AX.frame) }

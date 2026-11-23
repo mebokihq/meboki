@@ -101,4 +101,54 @@ import Testing
         #expect(MirrorGeometry.band(page: CGRect(x: 286, y: 0, width: 653, height: 60), editor: editor,
                                     margin: 77).isNull)
     }
+
+    /// Measured 2026-11-23 in a test doc (Cocoa, copy points): "together." ends paragraph 0 on the line at 8723.5,
+    /// paragraph 1 is empty, "Yesterday" starts paragraph 2 at 8691 (x 0). The empty line lies halfway.
+    @Test func emptyLineBetweenTextLiesBetweenItsLines() {
+        let p = MirrorGeometry.emptyLineCaret(
+            lineStartX: 0,
+            above: .init(rect: CGRect(x: 303, y: 8717, width: 45, height: 13), steps: 1),
+            below: .init(rect: CGRect(x: 0, y: 8684, width: 52, height: 14), steps: 1), pitch: nil)
+        #expect(p != nil)
+        #expect(p!.x == 0)
+        #expect(abs(p!.y - 8707.25) < 0.01)
+    }
+
+    /// Two empty lines between text: the caret on the second is two thirds of the way down.
+    @Test func secondOfTwoEmptyLines() {
+        let p = MirrorGeometry.emptyLineCaret(
+            lineStartX: 0,
+            above: .init(rect: CGRect(x: 0, y: 900, width: 10, height: 10), steps: 2),
+            below: .init(rect: CGRect(x: 0, y: 852, width: 10, height: 10), steps: 1), pitch: nil)
+        #expect(abs((p?.y ?? 0) - 873) < 0.01)
+    }
+
+    /// The empty last line of the copy: one pitch below the text above it ("unchanged." at 8587, pitch 16).
+    @Test func emptyLastLineStepsDownByPitch() {
+        let pitch = MirrorGeometry.pitch(upper: CGRect(x: 67, y: 8619, width: 23, height: 14),
+                                         lower: CGRect(x: 0, y: 8587, width: 22, height: 14), steps: 2)
+        #expect(pitch == 16)
+        let p = MirrorGeometry.emptyLineCaret(
+            lineStartX: 0, above: .init(rect: CGRect(x: 213, y: 8587, width: 61, height: 13), steps: 2),
+            below: nil, pitch: pitch)
+        #expect(p?.y == 8593.5 - 32)
+        // Empty first line: steps up from the text below.
+        let q = MirrorGeometry.emptyLineCaret(
+            lineStartX: 5, above: nil, below: .init(rect: CGRect(x: 0, y: 100, width: 10, height: 10), steps: 1),
+            pitch: 16)
+        #expect(q == CGPoint(x: 5, y: 121))
+    }
+
+    @Test func emptyLineGivesUpOnNonsense() {
+        let r = CGRect(x: 0, y: 100, width: 10, height: 10)
+        // No text on either side, or one side and no pitch.
+        #expect(MirrorGeometry.emptyLineCaret(lineStartX: 0, above: nil, below: nil, pitch: 16) == nil)
+        #expect(MirrorGeometry.emptyLineCaret(lineStartX: 0, above: .init(rect: r, steps: 1), below: nil,
+                                              pitch: nil) == nil)
+        // "Below" isn't below (clipped frames all at one y).
+        #expect(MirrorGeometry.emptyLineCaret(lineStartX: 0, above: .init(rect: r, steps: 1),
+                                              below: .init(rect: r, steps: 1), pitch: nil) == nil)
+        #expect(MirrorGeometry.pitch(upper: r, lower: r, steps: 1) == nil)
+        #expect(MirrorGeometry.pitch(upper: r, lower: r.offsetBy(dx: 0, dy: -20), steps: 0) == nil)
+    }
 }
