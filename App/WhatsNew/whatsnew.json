@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.0.8",
+    "date": "2026-11-23",
+    "highlights": [
+      {
+        "kind": "fixed",
+        "symbol": "safari",
+        "title": "Safari 27: underlines and fixes in the right place",
+        "body": "In rich editors in Safari 27, such as Proton Docs, underlines slid further right with every paragraph and an applied fix could land beside the word. They now sit under the right words, and Apply and Apply all write exactly where the mistake is."
+      }
+    ]
+  },
+  {
     "version": "1.0.7",
     "date": "2026-11-23",
     "highlights": [
