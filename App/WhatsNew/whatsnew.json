@@ -1,5 +1,47 @@
 [
   {
+    "version": "1.0.7",
+    "date": "2026-11-23",
+    "highlights": [
+      {
+        "kind": "new",
+        "symbol": "doc.text",
+        "title": "Checks in more editors",
+        "body": "Google Docs (with Tools › Accessibility › braille support on), Notion, LibreOffice Writer, Pages and VS Code are now checked as whole documents, with underlines on every line you see."
+      },
+      {
+        "kind": "improved",
+        "symbol": "arrow.right.circle",
+        "title": "The card moves on to the next fix",
+        "body": "After you apply a fix, the card glides to the next one instead of closing. Click a dot under the card to jump straight to that fix."
+      },
+      {
+        "kind": "new",
+        "symbol": "slider.horizontal.3",
+        "title": "Popup opacity and underline wave",
+        "body": "Settings › Appearance has two new sliders: how see-through the popups are, and how wavy the underlines look."
+      },
+      {
+        "kind": "new",
+        "symbol": "envelope",
+        "title": "Report an issue in one click",
+        "body": "Settings › About has a new look and a Report an issue button. It starts an email to support with your app and macOS versions already filled in."
+      }
+    ],
+    "items": [
+      { "kind": "improved", "text": "Firefox: rich editors are read right after launch, and their paragraphs stay apart." },
+      { "kind": "improved", "text": "Obsidian: underlines follow the text as you scroll." },
+      { "kind": "fixed", "text": "Your clipboard comes back after every applied fix, and when Meboki quits." },
+      { "kind": "fixed", "text": "⌘Tab and other shortcuts work while fixes are being written." },
+      { "kind": "fixed", "text": "Code blocks inside normal text are left untouched." },
+      { "kind": "fixed", "text": "x.com: list items get underlines." },
+      { "kind": "fixed", "text": "Safari: Apply all no longer stops halfway." },
+      { "kind": "fixed", "text": "Slack and other apps that trim pasted text keep the space around an added word." },
+      { "kind": "fixed", "text": "Popup shadows are no longer cut off at a rectangle." },
+      { "kind": "fixed", "text": "Onboarding shows the whole Download button." }
+    ]
+  },
+  {
     "version": "1.0.6",
     "date": "2026-11-20",
     "highlights": [
