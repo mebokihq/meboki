@@ -17,4 +17,8 @@ import Testing
     @Test func otherTextIsUntouched() {
         #expect(QuoteFolding.fold("plain text, no quotes 😀") == "plain text, no quotes 😀")
     }
+
+    @Test func noBreakSpaceFoldsToSpace() {
+        #expect(QuoteFolding.fold("The second\u{00A0}item") == "The second item")
+    }
 }

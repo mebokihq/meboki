@@ -3,6 +3,8 @@ import Foundation
 /// Apps that turn typed or pasted quotes into curly ones (Slack turns a pasted "doesn't" into "doesn’t",
 /// 2026-11-22): a write that went in reads back with other quotes. Comparisons that verify a write fold them, so
 /// that swap isn't taken for a failed write. Every quote is one UTF-16 unit on both sides, so offsets don't move.
+/// A no-break space folds to a plain space: Safari turns the trailing space of a pasted "The second " into
+/// U+00A0 (2026-11-23), and Apply all stopped there although the fix went in.
 public enum QuoteFolding {
     /// `s` with curly single and double quotes as straight ones.
     public static func fold(_ s: String) -> String {
@@ -14,5 +16,6 @@ public enum QuoteFolding {
 
     private static let map: [Unicode.Scalar: Unicode.Scalar] = [
         "\u{2018}": "'", "\u{2019}": "'", "\u{201C}": "\"", "\u{201D}": "\"",
+        "\u{00A0}": " ",
     ]
 }
