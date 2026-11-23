@@ -2993,8 +2993,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         var usedPaste = false
         // A live review's list is the whole text; otherwise the ranges refer to the snapshot plus our writes.
         let expected = s.live ? s.list.text : s.basis
-        let ok = s.snapshot.surface.replace(pid: s.snapshot.pid, range: range, original: e.original,
-                                            replacement: e.replacement, expected: expected,
+        // No whitespace at the ends of what is written: some apps trim it from a paste (Slack). Same text after.
+        let w = Edit(range: range, original: e.original, replacement: e.replacement).anchored(in: expected)
+        let ok = s.snapshot.surface.replace(pid: s.snapshot.pid, range: w.range, original: w.original,
+                                            replacement: w.replacement, expected: expected,
                                             pasteOnly: s.usedPaste) {
             // The keystroke fallback must reach the field, not a Meboki panel. A panel that was up gets a
             // moment to go; later writes of an apply find nothing up and don't wait.
