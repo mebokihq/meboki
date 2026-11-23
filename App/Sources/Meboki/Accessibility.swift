@@ -66,13 +66,18 @@ enum AX {
         copy(el, attr) as? String
     }
 
+    /// `AXSelectedTextRange` in value offsets (a Safari 27 field that counts one break per paragraph is converted,
+    /// `WebKitParagraphBreaks`).
     static func selectedRange(_ el: AXUIElement) -> NSRange? {
         guard let v = copy(el, kAXSelectedTextRangeAttribute), CFGetTypeID(v) == AXValueGetTypeID() else { return nil }
         var r = CFRange()
         guard AXValueGetValue(v as! AXValue, .cfRange, &r) else { return nil }
-        return NSRange(location: r.location, length: r.length)
+        let range = NSRange(location: r.location, length: r.length)
+        return WebKitParagraphBreaks.map(for: el)?.valueRange(range) ?? range
     }
 
+    /// Sets `AXSelectedTextRange` to `range` as given. A Safari 27 field that reads its selection in one break per
+    /// paragraph may still take it in value offsets: `AX.select` tries both and proves which (`WebKitParagraphBreaks`).
     @discardableResult
     static func setSelectedRange(_ el: AXUIElement, _ range: NSRange) -> Bool {
         var cf = CFRange(location: range.location, length: range.length)
@@ -176,7 +181,8 @@ enum AX {
         if let v = copy(el, kAXVisibleCharacterRangeAttribute), CFGetTypeID(v) == AXValueGetTypeID() {
             var r = CFRange()
             if AXValueGetValue(v as! AXValue, .cfRange, &r), r.length > 0 {
-                reported = NSRange(location: r.location, length: r.length)
+                let range = NSRange(location: r.location, length: r.length)
+                reported = WebKitParagraphBreaks.map(for: el)?.valueRange(range) ?? range
             }
         }
         if isEditableWebArea(el) { return reported ?? visibleMarkerRange(el) }

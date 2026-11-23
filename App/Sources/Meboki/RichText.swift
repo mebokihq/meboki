@@ -80,15 +80,31 @@ extension AX {
         let leafMarkers: (NSRange) -> Bool = { r in leafMarkerRange(el, r, text: text).map { setSelectedMarkers(el, $0) } ?? false }
         // A field where index selection was already off goes to the markers first (each failed proof waits 0.3 s).
         let markersFirst = LeafCache.shared.indexSelectionOff(el)
-        let methods: [(NSRange) -> Bool] = webArea
+        var methods: [(NSRange) -> Bool] = webArea
             ? [{ r in markerRange(el, r).map { setSelectedMarkers(el, $0) } ?? false }]
             : markersFirst ? [leafMarkers, index] : [index, leafMarkers]
+        // A Safari 27 field that counts one break per paragraph in its positions: the setter may take value offsets
+        // or its own count. Both are tried, the proof below tells which, and the field remembers it.
+        // Its `AXSelectedText` (and the getter) read the selection's numbers in value offsets, so they name the text
+        // at the wrong place (Safari 27.2, 2026-11-23: a fix pasted 47 characters past its word): there the proof is
+        // the text of the selected marker range, which WebKit takes from the page itself.
+        var collapsedSetter: [Int: Bool] = [:]
+        var proof: () -> Bool = { selectionShows(el, probe, expected) }
+        if !webArea, let map = WebKitParagraphBreaks.map(for: el, text: text) {
+            let raw: (NSRange) -> Bool = { r in setSelectedRange(el, r) }
+            let converted: (NSRange) -> Bool = { r in setSelectedRange(el, map.webKitRange(r)) }
+            let convertedFirst = WebKitParagraphBreaks.setterCounts(el) ?? true
+            methods = convertedFirst ? [converted, raw] : [raw, converted]
+            collapsedSetter = [0: convertedFirst, 1: !convertedFirst]
+            proof = { selectedMarkerTextShows(el, expected) }
+        }
         for (i, method) in methods.enumerated() {
-            guard method(probe), selectionShows(el, probe, expected) else { continue }
+            guard method(probe), proof() else { continue }
+            if let collapsed = collapsedSetter[i] { WebKitParagraphBreaks.learnSetter(el, countsBreaksOnce: collapsed) }
             // The probe proved this method's offsets right next to `range` (the read-back can't: Chrome reports
             // its own shifted offsets).
             if probe == range || method(range) {
-                if !webArea, !markersFirst, i > 0 {
+                if !webArea, !markersFirst, i > 0, collapsedSetter.isEmpty {
                     LeafCache.shared.setIndexSelectionOff(el)
                     Log.write("select @\(range.location)+\(range.length): index selection was off; text markers from now on in this field")
                 }
@@ -147,6 +163,18 @@ extension AX {
             } else if selection(el) == probe {
                 return true
             }
+            Thread.sleep(forTimeInterval: 0.01)
+        } while Date() < deadline
+        return false
+    }
+
+    /// The text of the selected marker range is `expected` (polled 0.3 s). False when the field has no marker
+    /// selection: then nothing is proven.
+    private static func selectedMarkerTextShows(_ el: AXUIElement, _ expected: String) -> Bool {
+        let deadline = Date().addingTimeInterval(0.3)
+        repeat {
+            if let sel = copy(el, "AXSelectedTextMarkerRange"), CFGetTypeID(sel) == AXTextMarkerRangeGetTypeID(),
+               let s = param(el, "AXStringForTextMarkerRange", sel) as? String, s == expected { return true }
             Thread.sleep(forTimeInterval: 0.01)
         } while Date() < deadline
         return false
@@ -223,8 +251,14 @@ extension AX {
         return leafBounds(el, range, text: text)
     }
 
-    /// `AXBoundsForRange` on `el`. Nil when the app doesn't support it or returns an empty rect.
+    /// `AXBoundsForRange` on `el`. Nil when the app doesn't support it or returns an empty rect. A Safari 27 field
+    /// that counts one break per paragraph gets the range in its own count (`WebKitParagraphBreaks`).
     static func nativeBounds(_ el: AXUIElement, _ range: NSRange) -> CGRect? {
+        rawBounds(el, WebKitParagraphBreaks.map(for: el)?.webKitRange(range) ?? range)
+    }
+
+    /// `AXBoundsForRange` on `el` with `range` as given.
+    static func rawBounds(_ el: AXUIElement, _ range: NSRange) -> CGRect? {
         var cf = CFRange(location: range.location, length: range.length)
         guard let p = AXValueCreate(.cfRange, &cf), let v = param(el, kAXBoundsForRangeParameterizedAttribute, p)
         else { return nil }
