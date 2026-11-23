@@ -323,6 +323,11 @@ enum AX {
         if isSecureField(el) { throw AXError2.secureField }
         // The focused field may be one paragraph of a bigger document: the surface decides what the text is.
         var surface = SurfaceResolver.surface(for: el, pid: pid)
+        // A woken canvas (`DormantCanvasStrategy`) resolved the element focused after waking: look at that one.
+        if CanvasWake.isDormant(el), !CFEqual(surface.anchor, el) {
+            el = surface.anchor
+            if isSecureField(el) { throw AXError2.secureField }
+        }
         if surface.isSecure { throw AXError2.secureField }
         var text = surface.text()
         if text == nil, missingTextError(el) == .appHidesText {

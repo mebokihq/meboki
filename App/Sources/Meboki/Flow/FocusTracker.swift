@@ -166,6 +166,12 @@ final class FocusTracker {
         let focused = IsSecureEventInputEnabled() ? nil
             : (named ?? focusedElement()).flatMap { AX.isSecureField($0) ? nil : $0 }
         if let focused, let element, CFEqual(focused, element) { return }
+        // A canvas that hides its document until asked (Pages, `CanvasWake`): ask once, then look again. The app
+        // posts no focus change when its text element appears.
+        if let focused, CanvasWake.nudge(focused, pid: pid) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.focusChanged() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.focusChanged() }
+        }
         // Left a text area for nothing, or for something that isn't one (a sheet's field: TextEdit's ⌘K link
         // sheet): look again until a text area has focus. TextEdit posts no focus change when the sheet closes and
         // the document gets the keys back (2026-11-16).

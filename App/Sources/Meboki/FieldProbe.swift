@@ -17,7 +17,11 @@ enum FieldProbe {
         }
         AX.prepare(app: app)
         Thread.sleep(forTimeInterval: 0.3)
-        guard let el = AX.focusedElement(pid: app.processIdentifier) else { print("nothing focused"); return }
+        guard var el = AX.focusedElement(pid: app.processIdentifier) else { print("nothing focused"); return }
+        if let woken = CanvasWake.wake(el, pid: app.processIdentifier) {
+            print("dormant canvas: woke the app, focus moved to \(AX.string(woken, kAXRoleAttribute) ?? "?")")
+            el = woken
+        }
         let role = AX.string(el, kAXRoleAttribute) ?? "?"
         print("role \(role), editable web area \(AX.isEditableWebArea(el)), automatic-check target \(AX.isEditableTextArea(el))")
         let t0 = Date()
